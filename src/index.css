@@ -1,0 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+@import "tailwindcss";
+
+
+@theme{
+    --font-inter: 'Inter', 'sans-serif';
+}
+
+
+  .scrolll::-webkit-scrollbar {
+  width: 4px;               /* Thin width */
+}
+
+.scrolll::-webkit-scrollbar-track {
+  background: transparent;  /* Optional */
+}
+
+.scrolll::-webkit-scrollbar-thumb {
+  background-color: #F6EEFC; 
+  border-radius: 8px;
+}
+
+/* Optional: Firefox support */
+.scrolll {
+  scrollbar-width: thin;
+  scrollbar-color: #F6EEFC transparent;
+}
+
+
+.scrolll2::-webkit-scrollbar {
+  width: 4px;               /* Thin width */
+}
+
+.scrolll2::-webkit-scrollbar-track {
+  background: transparent;  /* Optional */
+}
+
+.scrolll2::-webkit-scrollbar-thumb {
+  background-color: #fff; 
+  border-radius: 8px;
+}
+
+/* Optional: Firefox support */
+.scrolll2 {
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff transparent;
+}
+
+
+.label {
+  font-weight: 600;
+  font-size: 16px;
+  color: #282D30;
+}
+
+.label2 {
+  font-weight: 400;
+  font-size: 16px;
+  color: #282D30;
+}
+
+.input {
+  width: 60%;
+  height: 70px;
+  border-radius: 10px;
+  padding: 0 12px;
+  border: 1px solid #C4C8D2;
+  outline: none; /* remove default browser outline */
+  background-color: white;
+}
+
+.input:focus {
+  border-color: #6F3CDB; /* purple border */
+  transition-duration: 500ms; 
+}
+
+
+.input2 {
+  width: 100%;
+  height: 70px;
+  border-radius: 10px;
+  padding: 0 12px;
+  border: 1px solid #C4C8D2;
+  outline: none; /* remove default browser outline */
+  background-color: white;
+}
+
+.input2:focus {
+  border-color: #6F3CDB; /* purple border */
+  transition-duration: 500ms; 
+}
+
+.input3 {
+  width: 100%;
+  height: 70px;
+  border-radius: 10px;
+  padding: 0 12px;
+  border: 2px solid #C4C8D2;
+  outline: none; /* remove default browser outline */
+  background-color: white;
+}
+
+.input3:focus {
+  border-color: #6F3CDB; /* purple border */
+  transition-duration: 500ms; 
+}
+
+.input4 {
+  width: 100%;
+  height: 570px;
+  border-radius: 10px;
+  padding: 0 12px;
+  border: 2px solid #C4C8D2;
+  outline: none; /* remove default browser outline */
+  background-color: white;
+}
+
+.input4:focus {
+  border-color: #6F3CDB; /* purple border */
+  transition-duration: 500ms; 
+}
+
+
+
