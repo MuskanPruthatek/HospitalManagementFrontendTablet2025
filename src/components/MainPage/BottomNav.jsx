@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 
 const tabs = [
@@ -37,14 +37,14 @@ const BottomNav = ({ onRegister }) => {
     <div className="fixed inset-x-0 bottom-0 z-40">
       <div className="relative mx-auto w-full">
         {/* Floating Register Patient button */}
-        <button
-          onClick={onRegister}
+        <Link to="/main/patients/register-patient"
+          
           className="absolute left-1/2 -top-14 -translate-x-1/2 grid place-items-center
                      h-[120px] w-[120px] rounded-full bg-[#36D7A0] text-white shadow-xl"
           aria-label="Register New Patient"
         >
           <Plus size={50} />
-        </button>
+        </Link>
 
         {/* Bottom bar */}
         <nav

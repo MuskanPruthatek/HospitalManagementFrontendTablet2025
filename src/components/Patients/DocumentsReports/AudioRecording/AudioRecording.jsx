@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePatient } from "../../../../context/PatientContext";
 import axios from "axios";
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
-import { ChevronLeft, Mic, SlidersHorizontal, X, Square, Play, SkipBack, SkipForward, Pause, Pencil, Trash2, Loader2, ChevronRight, FastForward } from "lucide-react";
+import { ChevronLeft, Mic, SlidersHorizontal, X, Square, Play, SkipBack, SkipForward, Pause, Pencil, Trash2, Loader2, ChevronRight, FastForward, Folder } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 /* ---------- Utils ---------- */
@@ -379,7 +379,7 @@ const ContextMenu = ({ open, x, y, onClose, actions = [] }) => {
       style={{ left: x, top: y }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="w-56 rounded-xl bg-[#8F8F8F33]  border border-[#7D7D7D] p-2 space-y-1">
+      <div className="w-56 rounded-xl bg-black/60 backdrop-blur-lg p-2 space-y-1">
         {actions.map((a) => (
           <button
             key={a.label}
@@ -652,7 +652,7 @@ const EditModal = ({
 
         <h3 className="text-xl font-semibold mb-4">Edit Recording</h3>
 
-        <label className="block text-sm font-medium mb-1">Label / Name</label>
+        <label className="block text-sm font-medium mb-1">Label</label>
         <input
           type="text"
           value={label}
@@ -704,6 +704,177 @@ const EditModal = ({
   );
 };
 
+const CreateFolder = ({ open, onClose, patientId, admissionId, type, onCreated }) => {
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleCreate = async () => {
+    if (!name.trim()) return setError("Folder name is required.");
+    if (!patientId || !admissionId || !type) {
+      return setError("Missing required identifiers.");
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      await axios.post(`${VITE_APP_SERVER}/api/v1/folder`, {
+        name,
+        type,
+        patientId,
+        admissionId,
+      });
+
+      onCreated?.();
+      setName(""); // reset form
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err.message ||
+        "Failed to create folder";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-[1px] z-50 flex items-center justify-center px-4">
+      <div className="relative w-full max-w-lg rounded-2xl bg-[#FDFDFD] border border-[#D8D8D8] p-6">
+        <button onClick={onClose} className="absolute right-3 top-3 rounded-full p-2 hover:bg-black/5">
+          <X size={18} />
+        </button>
+
+        <h3 className="text-xl font-semibold mb-4">Create Folder</h3>
+
+        <label className="block text-sm font-medium mb-1">Folder Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 mb-2 outline-none focus:ring-2 focus:ring-[#6F3CDB]"
+          placeholder="Enter Name"
+        />
+
+        {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg border">Cancel</button>
+          <button
+            onClick={handleCreate}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg bg-[#6F3CDB] text-white flex items-center gap-2 disabled:opacity-50"
+          >
+            {loading ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MoveToFolderModal = ({ open, onClose, record, patientId, admissionId, fileType = "audioRecordings", onMoved }) => {
+  const [folders, setFolders] = useState([]);
+  const [selectedFolder, setSelectedFolder] = useState("");
+  const [moving, setMoving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open || !patientId || !admissionId) return;
+
+    const fetchFolders = async () => {
+      try {
+        const { data } = await axios.get(
+          `${VITE_APP_SERVER}/api/v1/folder/${patientId}/${admissionId}/${fileType}`
+        );
+        setFolders(data.data || []);
+      } catch (err) {
+        console.error("Failed to fetch folders", err);
+        setError("Failed to load folders");
+      }
+    };
+
+    fetchFolders();
+  }, [open, patientId, admissionId, fileType]);
+
+  const handleMove = async () => {
+    if (!selectedFolder) {
+      setError("Please select a folder");
+      return;
+    }
+
+    try {
+      setMoving(true);
+      setError("");
+
+      await axios.put(`${VITE_APP_SERVER}/api/v1/audio-video-rec/move-file`, {
+        patientId,
+        admissionId,
+        fileId: record?._id || record?.id,
+        folderId: selectedFolder,
+        fileType,
+      });
+
+      onMoved?.();
+      onClose();
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Move failed";
+      setError(msg);
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <button onClick={onClose} className="absolute top-3 right-3 p-2 hover:bg-gray-100 rounded-full">
+          <X size={18} />
+        </button>
+
+        <h3 className="text-xl font-semibold mb-4">Move to Folder</h3>
+
+        <label className="block text-sm font-medium mb-1">Select Folder</label>
+        <select
+          value={selectedFolder}
+          onChange={(e) => setSelectedFolder(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 mb-4 outline-none focus:ring-2 focus:ring-[#6F3CDB]"
+        >
+          <option value="">-- Select Folder --</option>
+          {folders.map((f) => (
+            <option key={f._id} value={f._id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+
+        {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+
+        <div className="flex justify-end gap-3 mt-4">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg border">Cancel</button>
+          <button
+            onClick={handleMove}
+            disabled={moving}
+            className="px-4 py-2 rounded-lg bg-[#6F3CDB] text-white disabled:opacity-60"
+          >
+            {moving ? "Moving..." : "Move"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ---------- Main Page ---------- */
 const AudioRecording = () => {
   const { selectedPatient } = usePatient();
@@ -722,6 +893,9 @@ const AudioRecording = () => {
   const [clips, setClips] = useState([]); // locally captured clips
   const [uploadingById, setUploadingById] = useState({}); // { [clipId]: { pct, status, err? } }
   const [currentIndex, setCurrentIndex] = useState(null);
+
+  const [createFolderOpen, setCreateFolderOpen] = useState(false)
+  const [moveFile, setMoveFile] = useState(null); 
 
 
   const [playerOpen, setPlayerOpen] = useState(false);
@@ -746,7 +920,7 @@ const AudioRecording = () => {
   const token = user?.token;
 
   const todayStr = new Date().toLocaleDateString();
-  const menuRecord = audioRecordings?.find(r => (r._id || r.id) === menu.clipId);
+  // const menuRecord = audioRecordings?.find(r => (r._id || r.id) === menu.clipId);
 
   useEffect(() => {
     if (!pid || !aid) return;
@@ -757,7 +931,7 @@ const AudioRecording = () => {
     try {
       setLoading(true);
       const { data } = await axios.get(
-        `${VITE_APP_SERVER}/api/v1/files-recordings/${patientId}/${admissionId}/audioRecordings`
+        `${VITE_APP_SERVER}/api/v1/audio-video-rec/${patientId}/${admissionId}/audioRecordings`
       );
       setAudioRecordings(data.data.audioRecordings);
     } catch (err) {
@@ -790,7 +964,7 @@ const AudioRecording = () => {
 
     try {
       setLoading(true);
-      await axios.post(`${VITE_APP_SERVER}/api/v1/files-recordings/upload`, fd, {
+      await axios.post(`${VITE_APP_SERVER}/api/v1/audio-video-rec/upload`, fd, {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
       });
       await fetchRecordings(pid, aid);               // ← refresh from backend
@@ -878,153 +1052,386 @@ const AudioRecording = () => {
   );
 
   const openEdit = (record) => {
-    setEditingRecord(record);
-    setLabel(record?.audioLabel || record?.label || record?.name || "");
-    setEditFile(null);
-    setUpdateProgress(0);
-    setEditOpen(true);
-  };
-
-  const submitEdit = async () => {
-    if (!editingRecord) return;
-    if (!pid || !aid) {
-      setAlert({ type: "error", message: "Missing patient or admission ID." });
-      return;
-    }
-    const fileId = editingRecord?._id || editingRecord?.id;
-    try {
-      setUpdating(true);
-      setUpdateProgress(0);
-
-      if (editFile) {
-        const fd = new FormData();
-        fd.append("patientId", String(pid));
-        fd.append("admissionId", String(aid));
-        fd.append("fileId", String(fileId));
-        fd.append("fieldType", "audioRecordings");
-        fd.append("audioRecordings", editFile);
-        if (label) fd.append("audioLabel", label);
-
-        await axios.put(`${VITE_APP_SERVER}/api/v1/files-recordings/update`, fd, {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            Authorization: `Bearer ${token}`,
-          },
-          onUploadProgress: (e) => {
-            const pct = Math.round(((e.loaded || 0) * 100) / (e.total || 1));
-            setUpdateProgress(pct);
-          }
-        });
-      } else {
-        await axios.put(`${VITE_APP_SERVER}/api/v1/files-recordings/update`, {
-          patientId: pid,
-          admissionId: aid,
-          fileId,
-          fieldType: "audioRecordings",
-          audioLabel: label,
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setUpdateProgress(100);
-      }
-
-      setAlert({ type: "success", message: "Updated successfully." });
-      setEditOpen(false);
-      setEditingRecord(null);
-      setLabel("");
-      setEditFile(null);
-      await fetchRecordings(pid, aid);
-    } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        "Update failed.";
-      setAlert({ type: "error", message: msg });
-    } finally {
-      setUpdating(false);
-      setUpdateProgress(0);
-    }
-  };
-
-  /* ---- Delete ---- */
-  const handleDelete = async (record) => {
-    if (!record) return;
-    const fileId = record?._id || record?.id;
-    if (!window.confirm("Delete this recording? This cannot be undone.")) return;
-
-    try {
-      setDeletingId(fileId);
-      await axios.delete(`${VITE_APP_SERVER}/api/v1/files-recordings/delete`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { patientId: pid, admissionId: aid, fileId, fieldType: "audioRecordings" }
-      });
-      setAlert({ type: "success", message: "Deleted successfully." });
-      if (editingRecord && (editingRecord._id === fileId || editingRecord.id === fileId)) {
-        setEditOpen(false);
-        setEditingRecord(null);
-      }
-      await fetchRecordings(pid, aid);
-    } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        "Delete failed.";
-      setAlert({ type: "error", message: msg });
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const [renameOpen, setRenameOpen] = useState(false);
-const [renameRecord, setRenameRecord] = useState(null);
-const [renaming, setRenaming] = useState(false);
-
-const openRename = (record) => {
-  setRenameRecord(record);
-  setRenameOpen(true);
+  const inFolder = isFolderFile(record, activeFolder);
+  setEditingRecord({
+    ...record,
+    __fromFolder: inFolder,
+    __folderId: inFolder ? getFolderId(activeFolder) : null,
+  });
+  setLabel(record?.audioLabel || record?.label || record?.name || "");
+  setEditFile(null);
+  setUpdateProgress(0);
+  setEditOpen(true);
 };
 
-const submitRename = async (newName) => {
-  if (!renameRecord) return;
-  const fileId = renameRecord._id || renameRecord.id;
-  if (!pid || !aid || !fileId) {
-    setAlert({ type: "error", message: "Missing identifiers to rename." });
+
+const submitEdit = async () => {
+  if (!editingRecord) return;
+
+  // Detect where the file lives
+  const inFolder  = !!editingRecord.__fromFolder || isFolderFile(editingRecord, activeFolder);
+  const folderId  = editingRecord.__folderId || getFolderId(activeFolder);
+  const fileId    = getFileId(editingRecord);
+
+  if (!fileId) {
+    setAlert({ type: "error", message: "Missing file id to update." });
     return;
   }
 
   try {
-    setRenaming(true);
-    await axios.put(
-      `${VITE_APP_SERVER}/api/v1/files-recordings/update`,
-      {
-        patientId: pid,
-        admissionId: aid,
-        fileId,
-        fieldType: "audioRecordings",
-        fileName: newName,            // <— key part for rename
-      },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    setAlert({ type: "success", message: "File renamed successfully." });
-    setRenameOpen(false);
-    setRenameRecord(null);
-    fetchReports(); // refresh list
+    setUpdating(true);
+    setUpdateProgress(0);
+
+    if (inFolder && folderId) {
+      // 🔵 FOLDER CASE: backend expects folderId + fileId (always), label/duration optional, file optional
+      // If replacing file -> use FormData (multipart). If only label -> you can still use FormData or JSON.
+      // We'll always use FormData here for simplicity.
+      const fd = new FormData();
+      fd.append("folderId", String(folderId));
+      fd.append("fileId", String(fileId));
+      if (label)    fd.append("label", label);
+      // If you track duration, append it too:
+      // if (editingRecord?.duration) fd.append("duration", String(editingRecord.duration));
+
+      if (editFile) {
+        // IMPORTANT: field name must match your multer.fields on the backend
+        fd.append("audioRecordings", editFile, editFile.name);
+      }
+
+      await axios.put(
+        `${VITE_APP_SERVER}/api/v1/folder/update-rec`, // ← adjust if your actual path differs
+        fd,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+          onUploadProgress: (e) => {
+            const pct = Math.round(((e.loaded || 0) * 100) / (e.total || 1));
+            setUpdateProgress(pct);
+          },
+        }
+      );
+
+      // Refresh folders and keep the user in the folder they’re editing
+      const { data } = await axios.get(
+        `${VITE_APP_SERVER}/api/v1/folder/${pid}/${aid}/audioRecordings`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const foldersFresh = data?.data || [];
+      setFolders(foldersFresh);
+
+      if (activeFolder?._id) {
+        const fresh = foldersFresh.find((f) => f._id === activeFolder._id);
+        if (fresh) setActiveFolder(fresh);
+        else setActiveFolder(null); // folder may have disappeared
+      }
+
+    } else {
+      // 🟢 ROOT CASE: use your existing update API
+      if (editFile) {
+        const fd = new FormData();
+        fd.append("patientId", String(pid));
+        fd.append("admissionId", String(aid));
+        fd.append("recordingId", String(fileId));
+        fd.append("type", "audio");
+        fd.append("audioRecordings", editFile, editFile.name);
+        if (label) fd.append("label", label);
+
+        await axios.put(`${VITE_APP_SERVER}/api/v1/audio-video-rec/update`, fd, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+          onUploadProgress: (e) => {
+            const pct = Math.round(((e.loaded || 0) * 100) / (e.total || 1));
+            setUpdateProgress(pct);
+          },
+        });
+      } else {
+        await axios.put(
+          `${VITE_APP_SERVER}/api/v1/audio-video-rec/update`,
+          {
+            patientId: pid,
+            admissionId: aid,
+            recordingId: fileId,
+            type: "audio",
+            label,
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setUpdateProgress(100);
+      }
+
+      await fetchRecordings(pid, aid);
+    }
+    setAlert({ type: "success", message: "Updated successfully." });
+    setEditOpen(false);
+    setEditingRecord(null);
+    setLabel("");
+    setEditFile(null);
   } catch (err) {
     const msg =
       err?.response?.data?.message ||
       err?.response?.data?.error ||
       err?.message ||
-      "Rename failed.";
+      "Update failed.";
+    setAlert({ type: "error", message: msg });
+  } finally {
+    setUpdating(false);
+    setUpdateProgress(0);
+  }
+};
+
+
+  /* ---- Delete ---- */
+ const handleDelete = async (record) => {
+  if (!record) return;
+  const fileId = getFileId(record);
+  const inFolder = isFolderFile(record, activeFolder);
+  const folderId = getFolderId(activeFolder);
+
+  if (!fileId) {
+    setAlert({ type: "error", message: "Missing file id to delete." });
+    return;
+  }
+  if (!window.confirm("Delete this recording? This cannot be undone.")) return;
+
+  try {
+    setDeletingId(fileId);
+
+    if (inFolder && folderId) {
+      // 🟣 NEW: delete inside a folder
+      // Adjust verb/path to your server (PUT/POST/DELETE with body).
+      await axios.delete(
+        `${VITE_APP_SERVER}/api/v1/folder/delete`,
+        { data: {folderId, fileId} },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Refresh folders & activeFolder
+      const { data } = await axios.get(
+        `${VITE_APP_SERVER}/api/v1/folder/${pid}/${aid}/audioRecordings`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const foldersFresh = data?.data || [];
+      setFolders(foldersFresh);
+
+      // If we stay inside the same folder, update its contents
+      if (activeFolder?._id) {
+        const fresh = foldersFresh.find((f) => f._id === activeFolder._id);
+        if (fresh) setActiveFolder(fresh);
+        else setActiveFolder(null); // folder might have been removed
+      }
+    } else {
+      // 🟢 Root file: use your existing delete API
+      await axios.delete(`${VITE_APP_SERVER}/api/v1/audio-video-rec/delete`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { patientId: pid, admissionId: aid, fileId, fieldType: "audioRecordings" }
+      });
+
+      await fetchRecordings(pid, aid);
+    }
+
+    // Close edit modal if it was the same file
+    if (editingRecord && getFileId(editingRecord) === fileId) {
+      setEditOpen(false);
+      setEditingRecord(null);
+    }
+
+    setAlert({ type: "success", message: "Deleted successfully." });
+  } catch (err) {
+    const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Delete failed.";
+    setAlert({ type: "error", message: msg });
+  } finally {
+    setDeletingId(null);
+  }
+};
+
+
+const [renameOpen, setRenameOpen] = useState(false);
+const [renameRecord, setRenameRecord] = useState(null);
+const [renaming, setRenaming] = useState(false);
+
+
+// A file shown while inside a folder list uses `fileId` in map
+const isFolderFile = (rec, activeFolder) => {
+  if (!rec) return false;
+  // explicit flag added in view mapping OR implicit by checking fileId presence
+  return !!rec.fromFolder || (!!activeFolder && (rec.fileId || (rec.data && rec.data.fileId)));
+};
+
+// Normalize to get the file id regardless of root/folder origin
+const getFileId = (rec) => rec?.fileId || rec?._id || rec?.id;
+
+// Derive the current folderId (when you are inside a folder)
+const getFolderId = (activeFolder) => activeFolder?._id || activeFolder?.id || null;
+
+const openRename = (record) => {
+  const inFolder = isFolderFile(record, activeFolder);
+  setRenameRecord({
+    ...record,
+    __fromFolder: inFolder,
+    __folderId: inFolder ? getFolderId(activeFolder) : null,
+  });
+  setRenameOpen(true);
+};
+
+const submitRename = async (newName) => {
+  if (!renameRecord) return;
+
+  // common ids
+  const recordingId = getFileId(renameRecord);
+  const inFolder = !!renameRecord.__fromFolder;
+  const folderId = renameRecord.__folderId;
+
+  if (!recordingId) {
+    setAlert({ type: "error", message: "Missing file id to rename." });
+    return;
+  }
+
+  try {
+    setRenaming(true);
+
+    if (inFolder && folderId) {
+      // 🟣 NEW: rename inside a folder
+      // Adjust the path to whatever your router mounts (examples below):
+      //   PUT  /api/v1/folder/rename-file
+      // or POST /api/v1/folder/rename-file
+      await axios.put(
+        `${VITE_APP_SERVER}/api/v1/folder/rename`,
+        { folderId, fileId: recordingId, newName },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // refresh folders (and active folder)
+      const { data } = await axios.get(
+        `${VITE_APP_SERVER}/api/v1/folder/${pid}/${aid}/audioRecordings`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const foldersFresh = data?.data || [];
+      setFolders(foldersFresh);
+
+      if (activeFolder?._id) {
+        const fresh = foldersFresh.find((f) => f._id === activeFolder._id);
+        if (fresh) setActiveFolder(fresh);
+      }
+    } else {
+      // 🟢 Root file: use your existing rename API
+      await axios.put(
+        `${VITE_APP_SERVER}/api/v1/audio-video-rec/edit`,
+        { patientId: pid, admissionId: aid, recordingId, type: "audio", newName },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      await fetchRecordings(pid, aid);
+    }
+
+    setAlert({ type: "success", message: "File renamed successfully." });
+    setRenameOpen(false);
+    setRenameRecord(null);
+  } catch (err) {
+    const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Rename failed.";
     setAlert({ type: "error", message: msg });
   } finally {
     setRenaming(false);
   }
 };
 
+
+// FOLDERS
+const [folders, setFolders] = useState([]);
+const [activeFolder, setActiveFolder] = useState(null); // null = root view
+
+// derived convenience
+const isRoot = !activeFolder;
+const rootItems = useMemo(() => {
+  // In root, show folders first, then loose files
+  // We mark items with a kind: 'folder' | 'file'
+  const folderItems = (folders || []).map((f) => ({
+    kind: "folder",
+    _id: f._id,
+    name: f.name,
+    updatedAt: f.updatedAt || f.createdAt,
+    filesCount: f.files?.length || 0,
+    data: f,
+  }));
+
+  const fileItems = (audioRecordings || []).map((a, index) => ({
+    kind: "file",
+    _id: a._id || a.id,
+    name: a.name || a.fileName,
+    uploadedAt: a.uploadedAt,
+    index,
+    data: a,
+  }));
+
+  return [...folderItems, ...fileItems];
+}, [folders, audioRecordings]);
+
+// items to render for the current view
+const viewItems = isRoot
+  ? rootItems
+  : (activeFolder?.files || []).map((a, index) => ({
+      kind: "file",
+      _id: a.fileId || a._id || a.id, // folder schema uses fileId
+      name: a.name,
+      uploadedAt: a.uploadedAt,
+      index,
+      data: a,
+      fromFolder: true,
+    }));
+
+  useEffect(() => {
+  if (!pid || !aid) return;
+
+  const fetchFolders = async () => {
+    try {
+      // If your API supports query params, prefer:
+      // GET /api/v1/folder?patientId=...&admissionId=...&type=audioRecordings
+      const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/folder`, {
+        params: { patientId: pid, admissionId: aid, type: "audioRecordings" },
+      });
+
+      // fallback client filter if backend doesn't filter:
+      const all = data?.data || [];
+      const scoped = all.filter(
+        (f) =>
+          String(f.patientId) === String(pid) &&
+          String(f.admissionId) === String(aid) &&
+          f.type === "audioRecordings"
+      );
+      setFolders(scoped);
+    } catch (err) {
+      console.error("Failed to fetch folders", err);
+    }
+  };
+
+  fetchFolders();
+}, [pid, aid]);
+
+
+  const openFolder = (folder) => {
+  setActiveFolder(folder?.data || folder); // accept either the mapped or raw folder
+  // close any open context menu
+  setMenu({ open: false, x: 0, y: 0, clipId: null });
+};
+
+const closeFolder = () => {
+  setActiveFolder(null);
+};
+
+const allSelectableItems = isRoot ? audioRecordings : (activeFolder?.files || []);
+const menuRecord =
+  (allSelectableItems || []).find((r) => (r._id || r.id || r.fileId) === menu.clipId)
+  || (audioRecordings || []).find((r) => (r._id || r.id) === menu.clipId);
+
+const hasItems = isRoot
+  ? ((folders?.length || 0) + (audioRecordings?.length || 0)) > 0
+  : ((activeFolder?.files?.length || 0) > 0);
+
   return (
-    <div className={`w-full relative h-full overflow-y-scroll ${audioRecordings && audioRecordings.length > 0 ? "bg-[#F4F6FA]" : "bg-white"} font-inter py-10`}
+    <div className={`w-full relative h-full overflow-y-scroll ${hasItems ? "bg-[#F4F6FA]" : "bg-white"} font-inter py-10`}
       onClick={() => menu.open && setMenu({ open: false, x: 0, y: 0, clipId: null })}>
 
       <Banner />
@@ -1049,7 +1456,7 @@ const submitRename = async (newName) => {
       </div>
 
       {/* Content */}
-      {audioRecordings && audioRecordings.length > 0 ? (
+      {hasItems ? (
         <div className="w-full portrait:h-[90%] landscape:h-[85%] overflow-y-scroll px-5 py-10">
           <div className="w-full justify-between flex">
             <div>
@@ -1060,7 +1467,7 @@ const submitRename = async (newName) => {
 
             </div>
 
-            <div className="flex items-center gap-3">
+             <div className="flex items-center gap-3">
               {uploading && (
                 <div className="w-48">
                   <div className="h-2 bg-gray-200 rounded">
@@ -1069,59 +1476,144 @@ const submitRename = async (newName) => {
                   <p className="text-xs text-gray-600 mt-1">Uploading… {uploadProgress}%</p>
                 </div>
               )}
+              <button
+                onClick={() => setRecordOpen(true)}
+                disabled={uploading}
+                className="w-[240px] h-[70px] bg-[#6F3CDB] rounded-[10px] flex justify-center items-center gap-x-3 text-[#FDFDFD] font-semibold text-[20px] disabled:opacity-60"
+              >
+                {uploading ? <Loader2 className="animate-spin" /> : <Mic size={28} />}
+                {uploading ? "Uploading…" : "Record Audio"}
+              </button>
+
+              <button onClick={()=>setCreateFolderOpen(true)} className="w-[240px] h-[70px] bg-[#36D7A0] rounded-[10px] flex justify-center items-center gap-x-3 text-[#FDFDFD] font-semibold text-[20px] disabled:opacity-60">
+                Create folder
+              </button>
+            </div>
+          </div>
+
+      {/* Breadcrumb */}
+<div className="w-full px-5 mt-6">
+  <div className="flex items-center gap-2 text-sm">
+    <button
+      onClick={closeFolder}
+      className={`font-semibold ${isRoot ? "text-[#6F3CDB]" : "text-[#6F3CDB] hover:underline"}`}
+      disabled={isRoot}
+    >
+      All Audios
+    </button>
+    {!isRoot && (
+      <>
+        <span className="text-[#A1A3B2]">/</span>
+        <span className="font-semibold text-[#282D30]">
+          {activeFolder?.name} <span className="text-[#A1A3B2]">({activeFolder?.files?.length || 0})</span>
+        </span>
+      </>
+    )}
+  </div>
+</div>
+
+
+        {/* Recorded clips grid */}
+<div className="w-full flex flex-row flex-wrap gap-5 mt-10">
+  {fetching && (
+    <div className="flex items-center gap-2 text-gray-600">
+      <Loader2 className="animate-spin" /> Loading recordings…
+    </div>
+  )}
+
+  {viewItems.map((item, i) => {
+    if (item.kind === "folder") {
+      const f = item.data;
+      return (
+        <div
+          key={`folder-${item._id}`}
+          className="group relative w-[270px] h-[310px] rounded-[16px] bg-[#ffffff] border border-[#ececec] hover:border-[#6F3CDB] transition-all shadow-sm hover:shadow-md flex flex-col justify-center items-center p-5 cursor-pointer"
+          onClick={() => openFolder(item)}
+         
+        >
+          <div className="flex flex-col gap-3 relative">
+            <div className="w-[53px] h-[53px] absolute -top-4 -right-2 rounded-full border-[5px] border-[#FDFDFD] bg-[#6F3CDB] flex justify-center items-center">
+            <p className="font-medium text-[16px] text-white">{item.filesCount}</p>
+          </div>
+           
+              <Folder fill="yellow" color="grey" size={110} />
+           
+            <div className="flex justify-center">
+              <p className="text-[#282D30] text-[18px] font-semibold line-clamp-2">
+                {item.name}
+              </p>
              
             </div>
           </div>
 
-          {/* Recorded clips grid */}
-          <div className="w-full flex flex-row flex-wrap gap-5 mt-10">
-            {fetching && (
-              <div className="flex items-center gap-2 text-gray-600">
-                <Loader2 className="animate-spin" /> Loading recordings…
-              </div>
-            )}
-            {
-              audioRecordings?.map((a, index) => (
-                <div key={a._id} className="w-[270px] h-[310px] rounded-[10px] bg-[#FDFDFD] flex flex-col justify-center items-center"
-                  onMouseDown={(e) => onPressStart(e, a)}
-                  onMouseUp={(e) => onPressEnd(e, a)}
-                  onMouseLeave={() => clearTimer(a._id)}
-                  onTouchStart={(e) => onPressStart(e, a)}
-                  onTouchEnd={(e) => onPressEnd(e, a)}
-                  onContextMenu={(e) => onContextMenu(e, a)}>
-                  {deletingId === a._id && (
-                    <div className="absolute inset-0 bg-white/70 backdrop-blur-sm rounded-[10px] flex items-center justify-center z-10">
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <Loader2 className="animate-spin" /> Deleting…
-                      </div>
-                    </div>
-                  )}
-                  <div className="relative">
-                    <div className="w-[53px] h-[53px] absolute -top-4 -right-2 rounded-full border-[5px] border-[#FDFDFD] bg-[#6F3CDB] flex justify-center items-center">
-                      <p className="font-medium text-[16px] text-white">{index + 1}</p>
-                    </div>
-                    <img src="/assets/audioFile.svg" className="w-[111px] h-[100px]" />
-                  </div>
-
-                  <div className="flex flex-col items-center mt-10">
-                    <p className="text-[#282D30] text-[18px] font-semibold truncate w-56 text-center">{a.name}</p>
-                    <p className="text-[#A1A3B2] text-[14px] font-medium">
-                      {new Date(a.uploadedAt).toLocaleString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                        hour12: true
-                      })}
-
-                    </p>
-                    {/* <audio controls src={c.url} className="mt-3 w-56" /> */}
-                  </div>
-                </div>
-              ))
-            }
+          <div className="mt-2">          
+            <p className="text-[12px] text-[#A1A3B2] justify-center">
+              Updated {new Date(item.updatedAt).toLocaleString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </p>
           </div>
+
+          <div className="absolute top-4 right-4">
+            <span className="px-2.5 py-1 text-[11px] rounded-full bg-[#F6EEFC] text-[#6F3CDB] border border-[#E9D8FF]">
+              Folder
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // FILE CARD (works for root files and folder files)
+    const a = item.data;
+    const fileUploadedAt = a.uploadedAt || a.createdAt || Date.now();
+    return (
+      <div
+        key={`file-${item._id}-${i}`}
+        className="relative w-[270px] h-[310px] rounded-[16px] bg-[#FDFDFD] border border-transparent hover:border-[#E7E7E7] transition-all shadow-sm hover:shadow-md flex flex-col justify-center items-center cursor-pointer"
+        onMouseDown={(e) => onPressStart(e, { _id: item._id, ...a })}
+        onMouseUp={(e) => onPressEnd(e, { _id: item._id, ...a })}
+        onMouseLeave={() => clearTimer(item._id)}
+        onTouchStart={(e) => onPressStart(e, { _id: item._id, ...a })}
+        onTouchEnd={(e) => onPressEnd(e, { _id: item._id, ...a })}
+        onContextMenu={(e) => onContextMenu(e, { _id: item._id, ...a })}
+      >
+        {deletingId === item._id && (
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-sm rounded-[16px] flex items-center justify-center z-10">
+            <div className="flex items-center gap-2 text-gray-700">
+              <Loader2 className="animate-spin" /> Deleting…
+            </div>
+          </div>
+        )}
+
+        <div className="relative">
+          <div className="w-[53px] h-[53px] absolute -top-4 -right-2 rounded-full border-[5px] border-[#FDFDFD] bg-[#6F3CDB] flex justify-center items-center">
+            <p className="font-medium text-[16px] text-white">{(item.index ?? i) + 1}</p>
+          </div>
+          <img src="/assets/audioFile.svg" className="w-[111px] h-[100px]" />
+        </div>
+
+        <div className="flex flex-col items-center mt-10 px-4">
+          <p className="text-[#282D30] text-[16px] font-semibold line-clamp-2 text-center">
+            {item.name}
+          </p>
+          <p className="text-[#A1A3B2] text-[13px] font-medium mt-1">
+            {new Date(fileUploadedAt).toLocaleString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            })}
+          </p>
+        </div>
+      </div>
+    );
+  })}
+</div>
+
         </div>
       ) : (
         <div className="w-full flex flex-col justify-center items-center">
@@ -1160,18 +1652,10 @@ const submitRename = async (newName) => {
         y={menu.y}
         onClose={() => setMenu({ open: false, x: 0, y: 0, clipId: null })}
         actions={[
-          {
-            label: "Edit File",
-           
-            onClick: () => openEdit(menuRecord),
-          },
-          {
-            label: "Delete File",
-           
-            onClick: () => handleDelete(menuRecord),
-          },
-          { label: "Rename File", onClick: () => openRename(menuRecord)  },
-          { label: "Create Folder", onClick: () => console.log("create folder") },
+          { label: "Edit File",  onClick: () => openEdit(menuRecord), },
+          { label: "Delete File", onClick: () => handleDelete(menuRecord),},
+          { label: "Rename File", onClick: () => openRename(menuRecord)},
+          { label: "Move File into Folder", onClick: () => setMoveFile(menuRecord) },
         ]}
       />
 
@@ -1195,6 +1679,68 @@ const submitRename = async (newName) => {
   renaming={renaming}
   onSubmit={submitRename}
 />
+
+<CreateFolder
+  open={createFolderOpen}
+  onClose={() => setCreateFolderOpen(false)}
+  patientId={pid}
+  admissionId={aid}
+  type="audioRecordings"
+  onCreated={async () => {
+    setCreateFolderOpen(false);
+    // refresh both
+    await fetchRecordings(pid, aid);
+    // refetch folders (same function as in useEffect)
+    try {
+      const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/folder`, {
+        params: { patientId: pid, admissionId: aid, type: "audioRecordings" },
+      });
+      const all = data?.data || [];
+      const scoped = all.filter(
+        (f) =>
+          String(f.patientId) === String(pid) &&
+          String(f.admissionId) === String(aid) &&
+          f.type === "audioRecordings"
+      );
+      setFolders(scoped);
+    } catch (e) {}
+  }}
+/>
+
+<MoveToFolderModal
+  open={!!moveFile}
+  onClose={() => setMoveFile(null)}
+  record={moveFile}
+  patientId={pid}
+  admissionId={aid}
+  fileType="audioRecordings"
+  onMoved={async () => {
+    setMoveFile(null);
+    await fetchRecordings(pid, aid);
+    // refresh folders too
+    try {
+      const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/folder`, {
+        params: { patientId: pid, admissionId: aid, type: "audioRecordings" },
+      });
+      const all = data?.data || [];
+      const scoped = all.filter(
+        (f) =>
+          String(f.patientId) === String(pid) &&
+          String(f.admissionId) === String(aid) &&
+          f.type === "audioRecordings"
+      );
+      setFolders(scoped);
+
+      // if we’re inside the destination folder, refresh its view
+      if (activeFolder?._id) {
+        const fresh = scoped.find((f) => f._id === activeFolder._id);
+        if (fresh) setActiveFolder(fresh);
+      }
+    } catch (e) {}
+    setAlert({ type: "success", message: "File moved to folder successfully." });
+  }}
+/>
+
     </div>
   );
 };

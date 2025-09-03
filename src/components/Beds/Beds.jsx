@@ -9,6 +9,8 @@ import CustomDropdown from "../CustomDropDown/CustomDropdown";
 import { loadCache, saveCache } from "../../offline/cache";
 import { isOnline } from "../../offline/helpers";
 import { fetchWithCache } from "../../offline/fetchWithCache";
+import OfflineQueueStatus from "../../offline/OfflineQueueStatus";
+
 
 const Beds = () => {
   const [selectedType, setSelectedType] = useState("");
@@ -147,12 +149,15 @@ const refreshBeds = async () => {
     await fetchBeds();
   };
 
+    // const { queued, uploaded } = useQueueCounts(["bedAssign", "bedExchange"]);
+
   return (
     <div className="w-full h-full bg-[#F4F6FA] font-inter relative">
       <div className="w-full h-fit py-10 px-5 bg-[#FDFDFD] flex justify-between items-center ">
         <div className="flex flex-col gap-y-4 font-semibold text-[24px]  ">
-          <p className="text-[#6F3CDB] ">Uploaded: 4</p>
-          <p className="text-[#FB8C5C]">Un-uploaded: 5</p>
+           {/* <p className="text-[#6F3CDB]">Uploaded: {uploaded.total}</p>
+          <p className="text-[#FB8C5C]">Un-uploaded: {queued.total}</p> */}
+           <OfflineQueueStatus />
         </div>
 
          <div className="flex flex-col gap-y-1 items-center  ">

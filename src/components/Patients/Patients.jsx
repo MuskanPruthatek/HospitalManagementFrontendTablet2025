@@ -346,7 +346,7 @@ const fullCount = filtered.length;
 
               <div className="w-full flex flex-row flex-wrap gap-3 mt-2 items-center ">
                 <div className="w-fit px-5 h-[50px] rounded-[10px] bg-[#F6EEFC] flex justify-center items-center ">
-                     <p className="font-extrabold lg:text-[26px] md:text-[24px] text-[#6F3CDB] ">101B</p>
+                     <p className="font-extrabold lg:text-[26px] md:text-[24px] text-[#6F3CDB] ">{latest?.bedId?.bedName || "-"}</p>
                 </div>
 
                 <p className="font-semibold lg:text-[20px] md:text-[18px] text-[#ED1F22] ">3 Days 11 hrs 21 min</p>
@@ -357,7 +357,13 @@ const fullCount = filtered.length;
 
               <div className="w-[50%] flex flex-row flex-wrap gap-4 justify-end ">
 
-                <div className="lg:w-[100px] lg:h-[100px] md:w-[70px] md:h-[70px] rounded-full bg-[#6F3CDB] flex justify-center items-center ">
+                <div  onClick={(e) => {
+        e.stopPropagation(); // prevent parent Link click
+        e.preventDefault();  // stop redirect to details
+        setSelectedPatient({ patientId: patient._id, admissionId: latest?._id ?? null });
+        // redirect to edit page
+        window.location.href = `/main/patients/edit-patient`;
+      }} className="lg:w-[100px] lg:h-[100px] md:w-[70px] md:h-[70px] rounded-full bg-[#6F3CDB] flex justify-center items-center ">
                    <img src="/assets/editPatient.svg" className="lg:w-[40px] lg:h-[40px] md:w-[30px] md:h-[30px] "/>
                 </div>
 

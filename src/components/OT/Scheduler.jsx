@@ -26,14 +26,20 @@ import {
 } from "lucide-react";
 import CreateSchedule from "./CreateSchedule";
 import axios from "axios";
-import CustomDropdown from "../CustomDropdown/CustomDropdown";
 import CustomDropdown3 from "../CustomDropdown/CustomDropdown3";
+import { isOnline, queueRequest, drainOutbox } from "../../offline/helpers";
+import { loadCache, saveCache } from "../../offline/cache";
+import { fetchWithCache } from "../../offline/fetchWithCache";
+import { v4 as uuid } from "uuid";
+
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 
 export default function Scheduler({
   initialDate = new Date(),
 }) {
 
+
+const [offline, setOffline] = useState(false);
 
   const eventRefs = useRef({});
   const [currentDate, setCurrentDate] = useState(initialDate);
@@ -52,24 +58,51 @@ export default function Scheduler({
   const [ot, setOt] = useState([])
      const [selectedOT, setSelectedOT] = useState(null)
 
-    const fetchOT = async () => {
-  try {
-    const { data } = await axios.get(
-      `${VITE_APP_SERVER}/api/v1/hospital-master/ot-master`
-    );
-    const list = data.data || [];
-    setOt(list);
-    // pick the first OT initially
-    if (list.length > 0) setSelectedOT(list[0]);
-  } catch (err) {
-    console.error(err);
-  }
-};
+       const fetchOT = (forceOnline = false) =>
+         fetchWithCache({
+           collection: "ots",
+           url: `${VITE_APP_SERVER}/api/v1/hospital-master/ot-master`,
+           setItems: setOt,
+           forceOnline,
+         });
+
+            const fetchSchedules = (forceOnline = false) =>
+         fetchWithCache({
+           collection: "schedules",
+           url: `${VITE_APP_SERVER}/api/v1/schedules/ot/${selectedOT?._id}`,
+           setItems: setSchedules,
+           forceOnline,
+         });
+
+         console.log(schedules)
+
+useEffect(() => {
+  const handleOnline = async () => {
+    try {
+      await drainOutbox();   // your existing helper
+      // refresh current OT’s schedules to reflect any queued changes
+      if (selectedOT?._id) await fetchSchedules();
+      setOffline(false);
+    } catch (e) {
+      console.error("Outbox drain failed", e);
+    }
+  };
+
+  window.addEventListener("online", handleOnline);
+  return () => window.removeEventListener("online", handleOnline);
+}, [selectedOT?._id]);
 
     
-      useEffect(() => {
-        fetchOT();
-      }, []);
+ useEffect(() => {
+  fetchOT(); 
+}, []);
+
+useEffect(() => {
+  if (!selectedOT && ot.length > 0) {
+    setSelectedOT(ot[0]);
+  }
+}, [ot, selectedOT]);
+
 
   //navigation helpers
   const goToToday = () => setCurrentDate(new Date());
@@ -103,67 +136,90 @@ export default function Scheduler({
     }
   }
 
-const fetchSchedules = async () => {
-  if (!selectedOT?._id) return;   // ⬅ guard
-  try {
-    setLoading(true);
-    const { data } = await axios.get(
-      `${VITE_APP_SERVER}/api/v1/schedules/ot/${selectedOT._id}`
-    );
-    setSchedules(data.data);
-    const evts = data.data.map((sch) => {
-      const startDt = parse(sch.startDateTime, "yyyy-MM-dd hh:mm a", new Date());
-      const bg = getColorByWeekday(startDt);
-      const borderC = bg.replace(/^bg-/, "border-");
-      return {
-        id: sch._id,
-        title: sch.surgeryName,
-        start: startDt,
-        end: parse(sch.endDateTime, "yyyy-MM-dd hh:mm a", new Date()),
-        doctorName: sch.doctorId?.doctorName || "N/A",
-        patientName: sch.patientId?.identityDetails?.patientName || "N/A",
-        admissionId: sch.admissionId, 
-        colorBg: bg,
-        colorBorder: borderC,
-      };
-    });
-    setEvents(evts);
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
+function mapSchedulesToEvents(list) {
+  return (list || []).map((sch) => {
+    const startDt = parse(sch.startDateTime, "yyyy-MM-dd hh:mm a", new Date());
+    const bg = getColorByWeekday(startDt);
+    const borderC = bg.replace(/^bg-/, "border-");
+    return {
+      id: sch._id,
+      title: sch.surgeryName,
+      start: startDt,
+      end: parse(sch.endDateTime, "yyyy-MM-dd hh:mm a", new Date()),
+      doctorName: sch.doctorId?.doctorName || "N/A",
+      patientName: sch.patientId?.identityDetails?.patientName || "N/A",
+      admissionId: sch.admissionId,
+      colorBg: bg,
+      colorBorder: borderC,
+    };
+  });
+}
 
 
   useEffect(() => {
-    fetchSchedules();
-  }, [selectedOT?._id]);
+  if (!selectedOT?._id) return;
+  fetchSchedules();
+}, [selectedOT?._id]);
+
+useEffect(() => {
+  setEvents(mapSchedulesToEvents(schedules));
+}, [schedules]);
+
 
   useEffect(() => {
     if (!events.length) return;
     const starts = events.map((e) => e.start.getHours());
     const ends = events.map((e) => e.end.getHours());
-    const minH = Math.min(4, ...starts); // never go higher than 4 AM
-    const maxH = Math.max(20, ...ends); // never lower than 8 PM
+    const minH = Math.min(4, ...starts); 
+    const maxH = Math.max(20, ...ends); 
     setHours(Array.from({ length: maxH - minH + 1 }, (_, i) => minH + i));
   }, [events]);
 
-  const deleteSchedule = async (id) => {
-    const ok = window.confirm("Are you sure you want to delete this schedule?");
-    if (!ok) return;        
-  
+
+  const deleteSchedule = async (scheduleId) => {
+  if (!scheduleId) return;
+
+  // optimistic UI
+  setSchedules((prev) => prev.filter((s) => s._id !== scheduleId));
+  setEvents((prev) => prev.filter((e) => e.id !== scheduleId));
+
+  // also update cached schedules (so a refresh while offline stays consistent)
+  try {
+    const cached = await loadCache("schedules"); // your helper returns array or []
+    const next = (cached || []).filter((s) => s._id !== scheduleId);
+    await saveCache("schedules", next);
+  } catch (e) {
+    console.warn("Could not update schedules cache after delete", e);
+  }
+
+  const url = `${VITE_APP_SERVER}/api/v1/schedules/${scheduleId}`;
+
+  if (isOnline()) {
     try {
-      const res = await axios.delete(
-        `${VITE_APP_SERVER}/api/v1/schedules/${id}`
-      );
-      
-      await fetchSchedules();
+      await axios.delete(url);
+      // success – nothing else to do, optimistic state already applied
     } catch (err) {
-      console.error("Delete failed", err);
-      alert(err.response?.data?.message || "Something went wrong");
+      console.error("Delete failed online; reverting", err);
+      // fallback: refetch to restore truth
+      await fetchSchedules(/*forceOnline*/ true);
     }
-  };
+  } else {
+    // queue the delete for later
+    try {
+      await queueRequest({
+        id: uuid(),
+        method: "DELETE",
+        url,
+        // optional: include any headers/body if your backend needs auth, etc.
+      });
+      setOffline(true); // show offline badge if you want
+    } catch (err) {
+      console.error("Queue delete failed; reverting", err);
+      await fetchSchedules();
+    }
+  }
+};
+
 
   return (
     <div className="w-full h-[90vh] flex flex-col font-inter text-sm select-none rounded-[10px] relative ">

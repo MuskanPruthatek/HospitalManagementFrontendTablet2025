@@ -306,7 +306,7 @@ const CameraCaptureModal = ({
     });
 
     const blob = pdf.output("blob");
-    const filename = `Radiology_Capture_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`;
+    const filename = `Documents_Capture_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`;
     const file = new File([blob], filename, { type: "application/pdf" });
     await onUpload(file);
   };
@@ -446,7 +446,7 @@ const EditModal = ({
           <X size={40} />
         </button>
 
-        <h3 className="text-[28px] font-semibold mb-4">Edit Radiology Report</h3>
+        <h3 className="text-[28px] font-semibold mb-4">Edit Lab Report</h3>
 
         <div className="mb-4">
           <p className="text-[20px] text-gray-600">Current file</p>
@@ -723,7 +723,7 @@ const CreateFolder = ({ open, onClose, patientId, admissionId, type, onCreated }
   );
 };
 
-const MoveToFolderModal = ({ open, onClose, record, patientId, admissionId, fileType = "radiologyReports", onMoved }) => {
+const MoveToFolderModal = ({ open, onClose, record, patientId, admissionId, fileType = "labReports", onMoved }) => {
   const [folders, setFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState("");
   const [moving, setMoving] = useState(false);
@@ -822,19 +822,19 @@ const MoveToFolderModal = ({ open, onClose, record, patientId, admissionId, file
 };
 
 /* ============================== Main View ============================== */
-const RadiologyReports = () => {
+const LabReports = () => {
   const { selectedPatient } = usePatient();
   const navigate = useNavigate();
 
   const [patientData, setPatientData] = useState(null);
-  const [docs, setDocs] = useState(false);
+
 
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const user = JSON.parse(localStorage.getItem("auth"));
   const token = user?.token;
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [radiologyReports, setRadiologyReports] = useState([]);
+  const [labReports, setLabReports] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -910,10 +910,10 @@ const RadiologyReports = () => {
     try {
       setLoading(true);
       const { data } = await axios.get(
-        `${VITE_APP_SERVER}/api/v1/files-recordings/${patientId}/${admissionId}/radiologyReports`,
+        `${VITE_APP_SERVER}/api/v1/files-recordings/${patientId}/${admissionId}/labReports`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setRadiologyReports(data.data.radiologyReports || []);
+      setLabReports(data.data.labReports || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -958,7 +958,7 @@ const RadiologyReports = () => {
       fd.append("patientId", String(patientId));
       fd.append("admissionId", String(admissionId));
       // backend expects this field name (array-compatible). We only send one PDF.
-      fd.append("radiologyReports", f);
+      fd.append("labReports", f);
 
       const res = await axios.post(
         `${VITE_APP_SERVER}/api/v1/files-recordings/upload`,
@@ -1046,7 +1046,7 @@ const RadiologyReports = () => {
 
       if (editFile) {
         // IMPORTANT: field name must match your multer.fields on the backend
-        fd.append("radiologyReports", editFile, editFile.name);
+        fd.append("labReports", editFile, editFile.name);
       }
 
       await axios.put(
@@ -1066,7 +1066,7 @@ const RadiologyReports = () => {
 
       // Refresh folders and keep the user in the folder they’re editing
       const { data } = await axios.get(
-        `${VITE_APP_SERVER}/api/v1/folder/${patientId}/${admissionId}/radiologyReports`,
+        `${VITE_APP_SERVER}/api/v1/folder/${patientId}/${admissionId}/labReports`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const foldersFresh = data?.data || [];
@@ -1085,8 +1085,8 @@ const RadiologyReports = () => {
         fd.append("patientId", String(patientId));
         fd.append("admissionId", String(admissionId));
         fd.append("fileId", String(fileId));
-        fd.append("fieldType", "radiologyReports");
-        fd.append("radiologyReports", editFile, editFile.name);
+        fd.append("fieldType", "labReports");
+        fd.append("labReports", editFile, editFile.name);
         // if (label) fd.append("label", label);
 
         await axios.put(`${VITE_APP_SERVER}/api/v1/files-recordings/update`, fd, {
@@ -1106,7 +1106,7 @@ const RadiologyReports = () => {
             patientId: patientId,
             admissionId: admissionId,
             fileId: fileId,
-            fieldType: "radiologyReports",
+            fieldType: "labReports",
             // label,
           },
           { headers: { Authorization: `Bearer ${token}` } }
@@ -1157,7 +1157,7 @@ const uploadFromCamera = async (pdfFile) => {
     const fd = new FormData();
     fd.append("patientId", String(patientId));
     fd.append("admissionId", String(admissionId));
-    fd.append("radiologyReports", pdfFile); // same field name as existing upload
+    fd.append("labReports", pdfFile); // same field name as existing upload
 
     const res = await axios.post(
       `${VITE_APP_SERVER}/api/v1/files-recordings/upload`,
@@ -1193,11 +1193,11 @@ const uploadFromCamera = async (pdfFile) => {
 
   /* --------------------------------- Filter -------------------------------- */
   const filteredReports = useMemo(() => {
-    if (!searchTerm.trim()) return radiologyReports;
-    return radiologyReports.filter((l) =>
+    if (!searchTerm.trim()) return labReports;
+    return labReports.filter((l) =>
       `${l.name}`.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [radiologyReports, searchTerm]);
+  }, [labReports, searchTerm]);
 
   // rename
 const [renameOpen, setRenameOpen] = useState(false);
@@ -1243,7 +1243,7 @@ const submitRename = async (newName) => {
 
       // refresh folders (and active folder)
       const { data } = await axios.get(
-        `${VITE_APP_SERVER}/api/v1/folder/${patientId}/${admissionId}/radiologyReports`,
+        `${VITE_APP_SERVER}/api/v1/folder/${patientId}/${admissionId}/labReports`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const foldersFresh = data?.data || [];
@@ -1257,7 +1257,7 @@ const submitRename = async (newName) => {
       // 🟢 Root file: use your existing rename API
       await axios.put(
         `${VITE_APP_SERVER}/api/v1/files-recordings/update`,
-        { patientId: patientId, admissionId: admissionId, fileId, fieldType: "radiologyReports", fileName: newName },
+        { patientId: patientId, admissionId: admissionId, fileId, fieldType: "labReports", fileName: newName },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -1314,7 +1314,7 @@ const rootItems = useMemo(() => {
     data: f,
   }));
 
-  const fileItems = (radiologyReports || []).map((a, index) => ({
+  const fileItems = (labReports || []).map((a, index) => ({
     kind: "file",
     _id: a._id || a.id,
     name: a.name || a.fileName,
@@ -1324,7 +1324,7 @@ const rootItems = useMemo(() => {
   }));
 
   return [...folderItems, ...fileItems];
-}, [folders, radiologyReports]);
+}, [folders, labReports]);
 
 // items to render for the current view
 const viewItems = isRoot
@@ -1345,9 +1345,9 @@ const viewItems = isRoot
   const fetchFolders = async () => {
     try {
       // If your API supports query params, prefer:
-      // GET /api/v1/folder?patientId=...&admissionId=...&type=radiologyReports
+      // GET /api/v1/folder?patientId=...&admissionId=...&type=labReports
       const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/folder`, {
-        params: { patientId: patientId, admissionId: admissionId, type: "radiologyReports" },
+        params: { patientId: patientId, admissionId: admissionId, type: "labReports" },
       });
 
       // fallback client filter if backend doesn't filter:
@@ -1356,7 +1356,7 @@ const viewItems = isRoot
         (f) =>
           String(f.patientId) === String(patientId) &&
           String(f.admissionId) === String(admissionId) &&
-          f.type === "radiologyReports"
+          f.type === "labReports"
       );
       setFolders(scoped);
     } catch (err) {
@@ -1406,7 +1406,7 @@ const [deletingId, setDeletingId] = useState(null)
 
       // Refresh folders & activeFolder
       const { data } = await axios.get(
-        `${VITE_APP_SERVER}/api/v1/folder/${pid}/${aid}/radiologyReports`,
+        `${VITE_APP_SERVER}/api/v1/folder/${pid}/${aid}/labReports`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const foldersFresh = data?.data || [];
@@ -1422,7 +1422,7 @@ const [deletingId, setDeletingId] = useState(null)
       // 🟢 Root file: use your existing delete API
       await axios.delete(`${VITE_APP_SERVER}/api/v1/files-recordings/delete`, {
         headers: { Authorization: `Bearer ${token}` },
-        data: { patientId: patientId, admissionId: admissionId, fileId, fieldType: "radiologyReports" }
+        data: { patientId: patientId, admissionId: admissionId, fileId, fieldType: "labReports" }
       });
 
       await fetchRecordings(pid, aid);
@@ -1443,13 +1443,13 @@ const [deletingId, setDeletingId] = useState(null)
   }
 };
 
-const allSelectableItems = isRoot ? radiologyReports : (activeFolder?.files || []);
+const allSelectableItems = isRoot ? labReports : (activeFolder?.files || []);
 const menuRecord =
   (allSelectableItems || []).find((r) => (r._id || r.id || r.fileId) === menu.clipId)
-  || (radiologyReports || []).find((r) => (r._id || r.id) === menu.clipId);
+  || (labReports || []).find((r) => (r._id || r.id) === menu.clipId);
 
 const hasItems = isRoot
-  ? ((folders?.length || 0) + (radiologyReports?.length || 0)) > 0
+  ? ((folders?.length || 0) + (labReports?.length || 0)) > 0
   : ((activeFolder?.files?.length || 0) > 0);
 
 const openDocument = (item) => {
@@ -1514,7 +1514,7 @@ const handleCardClick = (item) => {
         <div className="w-full portrait:h-[90%] landscape:h-[85%] overflow-y-scroll px-5 py-10">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-semibold text-[24px] text-black">Radiology Reports</p>
+              <p className="font-semibold text-[24px] text-black">Lab Reports</p>
               <p className="font-semibold text-[18px] text-[#6F3CDB]">
                 {new Date().toLocaleDateString()}
               </p>
@@ -1727,7 +1727,7 @@ const handleCardClick = (item) => {
   onClose={() => setCreateFolderOpen(false)}
   patientId={patientId}
   admissionId={admissionId}
-  type="radiologyReports"
+  type="labReports"
   onCreated={async () => {
     setCreateFolderOpen(false);
     // refresh both
@@ -1735,14 +1735,14 @@ const handleCardClick = (item) => {
     // refetch folders (same function as in useEffect)
     try {
       const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/folder`, {
-        params: { patientId: patientId, admissionId: admissionId, type: "radiologyReports" },
+        params: { patientId: patientId, admissionId: admissionId, type: "labReports" },
       });
       const all = data?.data || [];
       const scoped = all.filter(
         (f) =>
           String(f.patientId) === String(patientId) &&
           String(f.admissionId) === String(admissionId) &&
-          f.type === "radiologyReports"
+          f.type === "labReports"
       );
       setFolders(scoped);
     } catch (e) {}
@@ -1755,21 +1755,21 @@ const handleCardClick = (item) => {
   record={moveFile}
   patientId={patientId}
   admissionId={admissionId}
-  fileType="radiologyReports"
+  fileType="labReports"
   onMoved={async () => {
     setMoveFile(null);
     await fetchRecordings(patientId, admissionId);
     // refresh folders too
     try {
       const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/folder`, {
-        params: { patientId: patientId, admissionId: admissionId, type: "radiologyReports" },
+        params: { patientId: patientId, admissionId: admissionId, type: "labReports" },
       });
       const all = data?.data || [];
       const scoped = all.filter(
         (f) =>
           String(f.patientId) === String(patientId) &&
           String(f.admissionId) === String(admissionId) &&
-          f.type === "radiologyReports"
+          f.type === "labReports"
       );
       setFolders(scoped);
 
@@ -1786,4 +1786,4 @@ const handleCardClick = (item) => {
   );
 };
 
-export default RadiologyReports;
+export default LabReports;

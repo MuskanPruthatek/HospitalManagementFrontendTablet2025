@@ -19,14 +19,18 @@ const ExchangeBeds = ({ open, onClose, selectedBed, beds, refreshBeds }) => {
   const [patientI2L, setPatientI2L] = useState({});
 
   // Form
-  const [form, setForm] = useState({
-    patientAId: "",
-    admissionAId: "",
-    patientBId: "",
-    admissionBId: "",
-    exchangeDate: "",
-    exchangeTime: "",
-  });
+// put this above your useState
+const now = new Date();
+
+const [form, setForm] = useState({
+  patientAId: "",
+  admissionAId: "",
+  patientBId: "",
+  admissionBId: "",
+  exchangeDate: now.toISOString().split("T")[0], // YYYY-MM-DD
+  exchangeTime: now.toTimeString().slice(0, 5), // HH:MM
+});
+
 
   // Helpers
   const pickLatestAdmissionIdFromList = (admissions = []) => {
@@ -193,8 +197,8 @@ const submitExchange = async (e) => {
       admissionAId: '',
       patientBId: '',
       admissionBId: '',
-      exchangeDate: '',
-      exchangeTime: '',
+      exchangeDate: new Date().toISOString().split("T")[0],
+  exchangeTime: new Date().toTimeString().slice(0, 5),
     });
     await refreshBeds?.();
 
@@ -229,6 +233,8 @@ const submitExchange = async (e) => {
     (form.patientAId ? patientI2L[form.patientAId] : "") ||
     form.patientAId;
 
+
+    
   return (
     <div className="w-full h-full fixed bg-black/60 top-0 left-0 right-0 bottom-0 flex justify-center items-center font-inter z-50">
       <div className="w-[50%] max-w-[720px] h-fit pb-10 px-5 bg-[#FDFDFD] drop-shadow-lg drop-shadow-[#88888840] rounded-[20px]">

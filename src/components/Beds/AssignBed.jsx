@@ -4,7 +4,12 @@ import { X } from "lucide-react";
 import CustomDropdown from "../CustomDropDown/CustomDropdown";
 
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
-const ASSIGN_ENDPOINT = `${VITE_APP_SERVER}/api/v1/patient/assign-bed`; 
+const endpoint = `${VITE_APP_SERVER}/api/v1/patient/assign-bed`; 
+
+import { loadCache, saveCache } from "../../offline/cache";
+import { drainOutbox, isOnline, queueRequest } from "../../offline/helpers";
+import { v4 as uuid } from "uuid";
+import { senders } from "../../offline/senders";
 
 function resolveLatestAdmissionId(admissionDetails = []) {
   if (!Array.isArray(admissionDetails) || admissionDetails.length === 0) return "";
@@ -54,27 +59,53 @@ const AssignBed = ({ open, onClose, selectedBed2, beds, refreshBeds }) => {
   // Load patients when modal opens
   useEffect(() => {
     if (!open) return;
+
     (async () => {
       try {
-        const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/patient`);
-        const patients = Array.isArray(data?.data) ? data.data : [];
+        if (isOnline()) {
+          // server
+          const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/patient`);
+          const rows = data?.data ?? [];
 
-        const labels = patients.map((p) => p.identityDetails?.patientName || "Unnamed");
-        const L2I = Object.fromEntries(
-          patients.map((p) => [p.identityDetails?.patientName || "Unnamed", p._id])
-        );
-        const I2L = Object.fromEntries(
-          patients.map((p) => [p._id, p.identityDetails?.patientName || "Unnamed"])
-        );
+          // we only need lightweight fields for this modal cache
+          const lite = rows.map(p => ({
+            _id: p._id,
+            name: p?.identityDetails?.patientName || "",
+          }));
 
+          // update UI
+          const labels = lite.map(p => p.name);
+          const L2I = Object.fromEntries(lite.map(p => [p.name, p._id]));
+          const I2L = Object.fromEntries(lite.map(p => [p._id, p.name]));
+          setPatientOpts(labels);
+          setPatientL2I(L2I);
+          setPatientI2L(I2L);
+
+          // cache for offline reuse
+          await saveCache("patientsLite", lite);
+        } else {
+          // offline → cached list
+          const { items } = await loadCache("patientsLite");
+          const labels = (items || []).map(p => p.name);
+          const L2I = Object.fromEntries((items || []).map(p => [p.name, p._id]));
+          const I2L = Object.fromEntries((items || []).map(p => [p._id, p.name]));
+          setPatientOpts(labels);
+          setPatientL2I(L2I);
+          setPatientI2L(I2L);
+        }
+      } catch (err) {
+        // server failed → cached list
+        const { items } = await loadCache("patientsLite");
+        const labels = (items || []).map(p => p.name);
+        const L2I = Object.fromEntries((items || []).map(p => [p.name, p._id]));
+        const I2L = Object.fromEntries((items || []).map(p => [p._id, p.name]));
         setPatientOpts(labels);
         setPatientL2I(L2I);
         setPatientI2L(I2L);
-      } catch (err) {
-        console.error("Failed to fetch patients:", err);
+        console.warn("Patients (modal): using cached due to error", err);
       }
     })();
-  }, [open]);
+  }, [open, VITE_APP_SERVER]);
 
   // When a patient is chosen (by label), resolve patientId and fetch their latest admission
   const handlePatientChange = async (label) => {
@@ -101,35 +132,114 @@ const AssignBed = ({ open, onClose, selectedBed2, beds, refreshBeds }) => {
     }
   };
 
+  useEffect(() => {
+    const onBackOnline = async () => {
+      const res = await drainOutbox(senders);
+      if (res.byCollection?.bedAssign) {
+        alert('Bed assigned successfully');
+        await refreshBeds?.();
+      }
+    };
+    window.addEventListener('online', onBackOnline);
+    return () => window.removeEventListener('online', onBackOnline);
+  }, [refreshBeds]);
+
+  // const submitAssign = async (e) => {
+  //   e.preventDefault();
+  //   if (!form.patientId || !form.admissionId || !form.bedId) return;
+
+  //   try {
+  //     setSubmitting(true);
+  //     await axios.post(ASSIGN_ENDPOINT, {
+  //       patientId: form.patientId,
+  //       admissionId: form.admissionId,
+  //       bedId: form.bedId,
+  //     });
+
+  //     // Refresh grids & patient lists outside
+  //     await refreshBeds?.();
+  //     // await fetchPatients?.();
+
+  //     onClose?.();
+  //   } catch (err) {
+  //     console.error("Assign bed failed:", err);
+  //     alert(
+  //       err?.response?.data?.message ||
+  //         err?.message ||
+  //         "Failed to assign bed. Please try again."
+  //     );
+  //   } finally {
+  //     setSubmitting(false);
+  //   }
+  // };
+
+
+
   const submitAssign = async (e) => {
-    e.preventDefault();
-    if (!form.patientId || !form.admissionId || !form.bedId) return;
+  e.preventDefault();
+  setSubmitting(true);
 
-    try {
-      setSubmitting(true);
-      await axios.post(ASSIGN_ENDPOINT, {
-        patientId: form.patientId,
-        admissionId: form.admissionId,
-        bedId: form.bedId,
-      });
-
-      // Refresh grids & patient lists outside
-      await refreshBeds?.();
-      // await fetchPatients?.();
-
-      onClose?.();
-    } catch (err) {
-      console.error("Assign bed failed:", err);
-      alert(
-        err?.response?.data?.message ||
-          err?.message ||
-          "Failed to assign bed. Please try again."
-      );
-    } finally {
-      setSubmitting(false);
-    }
+  const payload = {
+    patientId: form.patientId,
+    admissionId: form.admissionId,
+    bedId: form.bedId
+    
   };
 
+  try {
+    if (isOnline()) {
+      // send now
+      await axios.post(endpoint, payload);
+      // also flush any backlog
+      const res = await drainOutbox(senders);
+      alert('Bed assigned successfully');
+      if (res.byCollection?.bedAssign) {
+        // if any queued ones also got processed, you’ve already alerted; no extra action needed
+      }
+    } else {
+      // queue for later using generic JSON sender
+      await queueRequest({
+        id: uuid(),
+        collection: 'bedAssign',   // namespace for this module
+        endpoint,
+        method: 'POST',
+        dto: payload,      // keep DTO consistent
+        meta: { sender: 'genericJSON' },
+      });
+      alert('You are offline. The request will process as soon as you connect to the internet.');
+    }
+
+    // UX after success/queue
+    onClose?.();
+    setForm({
+         patientId: "",
+    admissionId: "",
+    bedId: "",
+    });
+    await refreshBeds?.();
+
+  } catch (err) {
+    // Network error without HTTP response? queue it like offline
+    if (!err?.response) {
+      await queueRequest({
+        id: uuid(),
+        collection: 'bedAssign',
+        endpoint,
+        method: 'POST',
+        dto: { data: payload },
+        meta: { sender: 'genericJSON' },
+      });
+      alert('You are offline. The request will process as soon as you connect to the internet.');
+      onClose?.();
+      await refreshBeds?.();
+    } else {
+      console.error(err);
+      alert(err?.response?.data?.message || 'Assignment failed. Please try again.');
+    }
+  } finally {
+    setSubmitting(false);
+  }
+};
   const canSubmit =
     !submitting && form.patientId && form.admissionId && form.bedId;
 

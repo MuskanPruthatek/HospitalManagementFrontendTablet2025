@@ -61,4 +61,9 @@ export const senders = {
     const fd = dtoToFormData(row.dto);
     await axios.post(row.endpoint, fd);
   },
+  schedules: async (req) => {
+    // req = { id, module, op, method, url, body, headers }
+    await axios.delete(req.url, { headers: req.headers || {} });
+    return { success: true };
+  },
 };

@@ -73,4 +73,53 @@ export async function drainOutbox(senders) {
   return { processed, byCollection };
 }
 
+// --- events you can fire so UI can update without polling ---
+const OUTBOX_CHANGED_EVT = "outbox:changed";
+export const signalOutboxChanged = () => {
+  window.dispatchEvent(new CustomEvent(OUTBOX_CHANGED_EVT));
+};
+
+// --- if you already have a DB util, reuse it; otherwise minimal open helper ---
+async function openOfflineDB() {
+  return await new Promise((resolve, reject) => {
+    const req = indexedDB.open("HMS_OFFLINE_DB", 1);
+    req.onupgradeneeded = (e) => {
+      const db = req.result;
+      // these store names should match what queueRequest uses
+      if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("syncLog")) db.createObjectStore("syncLog", { keyPath: "id" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Count queued items for the given collections
+export async function getOutboxCountsByCollection(collections = []) {
+  const db = await openOfflineDB();
+  const tx = db.transaction("outbox", "readonly");
+  const store = tx.objectStore("outbox");
+  const all = await store.getAll();
+  const by = {};
+  let total = 0;
+  for (const c of collections) {
+    const n = all.filter(x => x.collection === c).length;
+    by[c] = n;
+    total += n;
+  }
+  return { total, by };
+}
+
+// Persist & read the last flush result so you can show "Uploaded"
+const LAST_FLUSH_KEY = "offline:lastFlushSummary";
+export function saveLastFlushSummary(summary) {
+  try { localStorage.setItem(LAST_FLUSH_KEY, JSON.stringify(summary || {})); } catch {}
+  signalOutboxChanged();
+}
+export function loadLastFlushSummary() {
+  try { return JSON.parse(localStorage.getItem(LAST_FLUSH_KEY) || "{}"); } catch { return {}; }
+}
+export { OUTBOX_CHANGED_EVT };
+
+
 

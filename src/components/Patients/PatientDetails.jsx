@@ -16,6 +16,8 @@ const PatientDetails = () => {
   const [patientData, setPatientData] = useState(null);
   const [currentPatientId, setCurrentPatientId] = useState(null);
 
+  
+
   // 1) Fetch list of patients once
   useEffect(() => {
     const fetchPatients = async () => {
@@ -187,7 +189,8 @@ const PatientDetails = () => {
               </p>
             </Link>
 
-            <div className="w-[50%] lg:h-[140px] md:h-[170px] gap-x-5 gap-y-3 rounded-[14px] bg-[#FB8C5C] flex lg:flex-row md:flex-col justify-center items-center ">
+             <Link
+              to="/main/patients/lab-reports" className="w-[50%] lg:h-[140px] md:h-[170px] gap-x-5 gap-y-3 rounded-[14px] bg-[#FB8C5C] flex lg:flex-row md:flex-col justify-center items-center ">
               <img
                 src="/assets/labReports.svg"
                 className="lg:w-[55px] lg:h-[55px] md:w-[40px] md:h-[40px] "
@@ -195,7 +198,7 @@ const PatientDetails = () => {
               <p className="font-semibold text-[24px] text-[#FDFDFD] md:text-center lg:text-start ">
                 Laboratory <br></br>Report
               </p>
-            </div>
+            </Link>
           </div>
         </div>
 
