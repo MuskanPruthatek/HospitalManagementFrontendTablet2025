@@ -78,7 +78,7 @@ const ChangeConsultantForm = ({ value, patientId, admissionId, onTransfer }) => 
       </div>
 
       <form onSubmit={handleSubmit} className="w-[100%] flex flex-col gap-y-4 my-5 pb-8 ">
-        <div className="w-[90%] justify-end flex gap-x-3 items-center ">
+       <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label whitespace-nowrap">Consulting Doctor*:</p>
           <CustomDropdown
               options={doctorOpts}
@@ -87,27 +87,27 @@ const ChangeConsultantForm = ({ value, patientId, admissionId, onTransfer }) => 
             />
         </div>
 
-        <div className="w-[90%] justify-end flex gap-x-3 items-center ">
+        <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label ">Change Date:</p>
           <input
             type="date"
-            className="input "
+            className="input2 "
             value={changeDate}
             onChange={(e) => setChangeDate(e.target.value)}
           />
         </div>
 
-        <div className="w-[90%] justify-end flex gap-x-3 items-center ">
+        <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label ">Change Time:</p>
           <input
             type="time"
-            className="input "
+            className="input2 "
             value={changeTime}
             onChange={(e) => setChangeTime(e.target.value)}
           />
         </div>
 
-        <button className="w-[80%] h-[50px] rounded-[10px] mt-3 bg-[#36D7A0] text-white font-medium text-[16px] self-center ">
+        <button className="w-[90%] h-[50px] rounded-[10px] mt-3 bg-[#36D7A0] text-white font-medium text-[16px] self-center ">
           Transfer Patient
         </button>
       </form>

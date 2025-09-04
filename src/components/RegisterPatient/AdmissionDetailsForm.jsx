@@ -5,6 +5,107 @@ import Camera from "./Camera";
 import ReferredDoctorCreateForm from "./ReferredDoctorCreateForm";
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 //
+const FIELD_BINDINGS = {
+  // Location & bed
+  bedDepartment: "Bed Department",
+
+  // Vitals / basics
+  weight: "Weight",
+  height: "Patient Height",
+  bloodGroup: "Blood Group",
+  patientType: "Patient Type (New/Old)",
+
+  // Administrative / status
+  applicableClass: "Applicable Class",
+  emergencyNo: "Emergency No",
+
+  // Doctors & referrals
+
+  referredByDoctorId: "Referred by Doctor",
+  referralFromDoctor: "Referral from Doctor",
+  referredByDoctorSelectBox: "Referred by Doctor Select Box",
+  otherConsultant: "Other Consultants",
+
+  // MLC
+  mlcType: "Patient MLC Type",
+  mlcNo: "MLC No",
+
+  // Neonatal / maternity specifics
+  birthAsphyxiaAndNICUShifted: "Birth asphyxia & NICU shifted",
+  termOfBaby: "Term of baby",
+  modeOfDelivery: "Mode of Delivery",
+  babyIllness: "Baby Illness",
+  husbandName: "Husband Name",
+  foodPreference: "Food Preference",
+  birthTime: "Birth Time",
+  motherAge: "Mother Age",
+
+  // Procedures / labs / reports
+  operations: "Operations",
+  laboratorySelectionId: "Laboratory Selection",
+  covidReport: "Covid Report",
+  vaccinationDetails: "Vaccination Details",
+
+  // Discharge checklists
+  clinicalDischarge: "Clinical Discharge",
+  billingDischarge: "Billing Discharge",
+  pharmacyDischarge: "Pharmacy Discharge",
+  labDischarge: "Lab Discharge",
+
+  // Misc feature toggles
+  maintainMRDFileStatus: "Maintain MRD File Status",
+  addDietModule: "Add Diet Module",
+  useClinicalScoreCalculator: "Use Clinical Score Calculator",
+  CPT: "CPT",
+
+  // Relative / attendant details (group toggle)
+  relativeDetails: "Relative Details (Attendant)", // controls responsiblePerson, relationship, relativeContactNo
+
+  // Employer / finance
+  employerCompanyName: "Employer Company Name",
+  TIDNumber: "TID Number",
+  paymentMode: "Payment Mode Options",
+  paymentRemark: "Payment Remark",
+  corporation: "Patient from Corporation",
+
+  // Notes / diagnoses
+  complaints: "Complaints",
+  pastFamilyHistory: "Past/Family History",
+  provisionalDiagnosis: "Provisional Diagnosis",
+  finalDiagnosis: "Final Diagnosis",
+  remarks: "Remark",
+
+  // Media
+  patientPhoto: "Patient Photo",
+};
+
+function useAdmissionFlags(fields = []) {
+  const lookup = useMemo(() => {
+    const m = new Map();
+    for (const f of fields) {
+      m.set((f.fieldName || "").trim().toLowerCase(), !!f.status);
+    }
+    return m;
+  }, [fields]);
+
+  const showByFieldName = (name, fallback = true) => {
+    const key = (name || "").trim().toLowerCase();
+    return lookup.has(key) ? lookup.get(key) : fallback; // default to visible if not configured
+  };
+
+  const show = (uiKey, fallback = true) => {
+    const bound = FIELD_BINDINGS[uiKey] ?? uiKey;
+    if (Array.isArray(bound)) {
+      // visible if ANY bound field is enabled; switch to .every if you want ALL required
+      return bound.some((n) => showByFieldName(n, fallback));
+    }
+    return showByFieldName(bound, fallback);
+  };
+
+  return { show };
+}
+
+
 const AdmissionDetailsForm = ({ value, onChange }) => {
   const [addNewReferred, setAddNewReferred] = useState(false);
   const [transferHistory, setTransferHistory] = useState(false);
@@ -155,9 +256,6 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
     });
   };
 
-  // const handleNestedChange = (outer, inner, newVal) =>
-  //   onChange({ [outer]: { ...value[outer], [inner]: newVal } });
-
   const handleNestedChange = (outer, inner, newValOrEvt) => {
     const val =
       newValOrEvt && newValOrEvt.target
@@ -175,6 +273,25 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
       },
     });
   };
+  
+  const [admissionFields, setAdmissionFields] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        // replace endpoint if different; using your sample response shape
+        const { data } = await axios.get( `${VITE_APP_SERVER}/api/v1/document-master/admissionform-master`);
+        setAdmissionFields(data.data || []);
+      } catch (e) {
+        console.error("Failed to fetch admission fields", e);
+        setAdmissionFields([]); // fall back to default-true behavior
+      }
+    })();
+  }, []);
+
+  
+  const { show } = useAdmissionFlags(admissionFields);
+
   return (
     <div className="w-full relative mt-5 pb-6 ">
       <div className="w-[95%] flex justify-center mx-auto gap-x-2 ">
@@ -206,7 +323,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
             />
           </div>
 
-          <div className="flex w-full gap-x-3 items-center justify-end ">
+       {show("emergencyNo") && (   <div className="flex w-full gap-x-3 items-center justify-end ">
             <p className="label ">Emergency No:</p>
             <input
               type="number"
@@ -216,7 +333,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               onChange={handleFlatChange}
               className="input "
             />
-          </div>
+          </div> )}
 
           <div className="flex w-full gap-x-3 items-center justify-end ">
             <p className="label ">Floor Number:</p>
@@ -249,7 +366,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
             </div>
           </div>
 
-          <div className="flex w-full gap-x-3 items-center justify-end ">
+          {show("bedDepartment") && (  <div className="flex w-full gap-x-3 items-center justify-end ">
             <p className="label ">Bed Department:</p>
             <input
               type="text"
@@ -259,10 +376,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.bedDepartment}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           {/* Weight */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("weight") && (  <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Weight (kg):</p>
             <input
               type="number"
@@ -271,10 +388,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.weight}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           {/* Height */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("height") && (   <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Height (cm):</p>
             <input
               type="number"
@@ -283,10 +400,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.height}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           {/* Blood Group */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("bloodGroup") && (  <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Blood Group:</p>
             <div className="w-[60%]">
               <CustomDropdown label="Select Blood Group"
@@ -295,9 +412,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
                 onChange={(label) => onChange({ bloodGroup: label })}
               />
             </div>
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("patientType") && (   <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Patient Type:</p>
             <div className="w-[60%]">
               <CustomDropdown label="Select Patient Type"
@@ -306,20 +423,20 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
                 onChange={(label) => onChange({ patientType: label })}
               />
             </div>
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end ">
+          {show("patientStatus") && (  <div className="flex w-full gap-x-3 items-center justify-end ">
             <p className="label ">Patient Status:</p>
             <div className="w-[60%]">
-              <CustomDropdown label="Select Patient Status"
+              <CustomDropdown label="Select Patint Status"
                 options={["Admitted", "Discharged"]}
                 selected={value.patientStatus}
                 onChange={(label) => onChange({ patientStatus: label })}
               />
             </div>
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end ">
+          {show("applicableClass") && (  <div className="flex w-full gap-x-3 items-center justify-end ">
             <p className="label ">Applicable Class:</p>
             <div className="w-[60%]">
               <CustomDropdown label="Select Applicable Class"
@@ -328,7 +445,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
                 onChange={(label) => onChange({ applicableClass: label })}
               />
             </div>
-          </div>
+          </div> )}
 
           <div className="flex w-full gap-x-3 items-center justify-end ">
             <p className="label ">Admission Date*:</p>
@@ -366,8 +483,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               />
             </div>
           </div>
+
           <div className="w-full">
-            <div className="flex w-full gap-x-3 items-center justify-end ">
+          {show("referredByDoctorId") && (   <div className="flex w-full gap-x-3 items-center justify-end ">
               <p className="label">Referred by Doctor:</p>
               <div className="w-[60%]">
                 <CustomDropdown label="Select Referred Doctor"
@@ -378,7 +496,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
                   }
                 />
               </div>
-            </div>
+            </div> )}
 
             <div className="flex justify-end mt-5  w-full">
               <button
@@ -392,7 +510,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
           </div>
 
           {/* Referral From Doctor (free-text, different from select box) */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("referralFromDoctor") && (  <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Referral From Doctor:</p>
             <input
               type="text"
@@ -401,9 +519,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.referralFromDoctor}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-           <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("referredByDoctorSelectBox") && (  <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Referred By Doctor Select Box:</p>
             <input
               type="text"
@@ -412,9 +530,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.referredByDoctorSelectBox}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+        {show("otherConsultant") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Other Consultant:</p>
             <input
               className="input"
@@ -422,7 +540,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.otherConsultant}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           <div className="flex w-full gap-x-3  justify-end">
             <p className="label">Patient Detail:</p>
@@ -450,7 +568,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
             </div>
           </div>
 
-          <div className="flex w-full gap-x-3  justify-end">
+         {show("mlcType") && ( <div className="flex w-full gap-x-3  justify-end">
             <p className="label">Patient MLC Type:</p>
 
             <div className="flex gap-x-5 items-center w-[60%]">
@@ -473,9 +591,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
                 </label>
               ))}
             </div>
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+        {show("mlcNo") && (  <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">MLC No:</p>
             <input
               type="text"
@@ -485,10 +603,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.mlcNo}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
 {/* Birth Asphyxia + NICU shifted */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("birthAsphyxiaAndNICUShifted") && (<div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label whitespace-nowrap">Birth Asphyxia &amp; NICU Shifted:</p>
             <div className="w-[60%] ">
             <input
@@ -499,10 +617,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               className="w-5 h-5 accent-[#36D7A0]"
             />
             </div>
-          </div>
+          </div> )}
 
           {/* Term of baby, Mode of delivery, Baby illness */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("termOfBaby") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Term of Baby:</p>
             <input
               type="text"
@@ -511,9 +629,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.termOfBaby}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("modeOfDelivery") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Mode of Delivery:</p>
             <input
               type="text"
@@ -522,9 +640,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.modeOfDelivery}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("babyIllness") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Baby Illness:</p>
             <input
               type="text"
@@ -533,10 +651,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.babyIllness}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           {/* Husband name / Food pref (useful in maternity) */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("husbandName") && (<div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Husband Name:</p>
             <input
               type="text"
@@ -545,9 +663,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.husbandName}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("foodPreference") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Food Preference:</p>
             <input
               type="text"
@@ -556,10 +674,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.foodPreference}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           {/* Birth time & Mother age */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("birthTime") && (  <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Birth Time:</p>
             <input
               type="time"
@@ -568,9 +686,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.birthTime}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("motherAge") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Mother Age:</p>
             <input
               type="number"
@@ -578,11 +696,11 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               name="motherAge"
               value={value.motherAge}
               onChange={handleFlatChange}
-            />
-          </div>
+            /> 
+          </div>)}
 
          {/* Operations */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("operations") && (  <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Operations:</p>
             <input
               type="text"
@@ -591,10 +709,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.operations}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           {/* Laboratory Selection */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+           {show("laboratorySelectionId") && (<div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Laboratory Selection:</p>
             <div className="w-[60%] ">
             <CustomDropdown label="Select Laboratory"
@@ -605,10 +723,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
                 }
               />
             </div>
-          </div>
+          </div> )}
 
           {/* COVID Report */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("covidReport") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">COVID Report:</p>
             <input
               type="text"
@@ -617,10 +735,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.covidReport}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           {/* Vaccination Details */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("vaccinationDetails") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Vaccination Details:</p>
             <input
               type="text"
@@ -629,10 +747,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.vaccinationDetails}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           {/* Clinical & Billing discharge checkboxes */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("clinicalDischarge") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label whitespace-nowrap">Clinical Discharge:</p>
             <div className="w-[60%] ">
             <input
@@ -643,8 +761,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               className="w-5 h-5 accent-[#36D7A0]"
             />
             </div>
-          </div>
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          </div> )}
+
+         {show("billingDischarge") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label whitespace-nowrap ">Billing Discharge:</p>
              <div className="w-[60%] ">
             <input
@@ -655,10 +774,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               className="w-5 h-5 accent-[#36D7A0]"
             />
             </div>
-          </div>
+          </div> )}
 
           {/* Pharmacy & Lab discharge */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("pharmacyDischarge") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label whitespace-nowrap">Pharmacy Discharge:</p>
              <div className="w-[60%] ">
             <input
@@ -669,8 +788,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               className="w-5 h-5 accent-[#36D7A0]"
             />
             </div>
-          </div>
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          </div> )}
+
+         {show("labDischarge") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label whitespace-nowrap">Lab Discharge:</p>
              <div className="w-[60%] ">
             <input
@@ -681,10 +801,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               className="w-5 h-5 accent-[#36D7A0]"
             />
             </div>
-          </div>
+          </div> )}
 
           {/* Maintain MRD file */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("maintainMRDFileStatus") && (<div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label whitespace-nowrap">Maintain MRD File:</p>
              <div className="w-[60%] ">
             <input
@@ -695,10 +815,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               className="w-5 h-5 accent-[#36D7A0]"
             />
             </div>
-          </div>
+          </div> )}
 
           {/* Add Diet Module / Clinical Score Calculator */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("addDietModule") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label whitespace-nowrap">Add Diet Module:</p>
              <div className="w-[60%] ">
             <input
@@ -709,8 +829,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               className="w-5 h-5 accent-[#36D7A0]"
             />
             </div>
-          </div>
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          </div> )}
+
+         {show("useClinicalScoreCalculator") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label whitespace-nowrap">Use Clinical Score Calculator:</p>
             <div className="w-[60%] ">
             <input
@@ -721,10 +842,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               className="w-5 h-5 accent-[#36D7A0]"
             />
             </div>
-          </div>
+          </div> )}
 
           {/* CPT */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("CPT") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">CPT:</p>
             <input
               type="text"
@@ -733,9 +854,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.CPT}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-        <div className="flex w-full gap-x-3 items-center justify-end ">
+      {show("relativeDetails") && ( <>
+       <div className="flex w-full gap-x-3 items-center justify-end ">
           <p className="label ">Responsible Person:</p>
           <input
             type="text"
@@ -747,7 +869,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
              handleNestedChange("relativeDetails", "responsiblePerson", e)
              }
           />
-        </div>
+        </div> 
 
         <div className="flex w-full gap-x-3 items-center justify-end">
           <p className="label">Relationship:</p>
@@ -774,10 +896,11 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
              handleNestedChange("relativeDetails", "relativeContactNo", e)
              }
           />
-        </div>
+        </div> 
+        </>)}
 
         {/* Employer company name & TID number */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("employerCompanyName") && (   <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label whitespace-nowrap">Employer / Company Name:</p>
             <input
               type="text"
@@ -786,9 +909,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.employerCompanyName}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
           
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("TIDNumber") && (   <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">TID Number:</p>
             <input
               type="text"
@@ -797,9 +920,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.TIDNumber}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-start justify-end">
+          {show("paymentMode") && (  <div className="flex w-full gap-x-3 items-start justify-end">
             <p className="label pt-2">Payment Mode</p>
             <div className="grid grid-cols-3 gap-2 w-[60%]">
               {[
@@ -826,10 +949,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
                 </label>
               ))}
             </div>
-          </div>
+          </div> )}
 
           {/* Payment remark (string separate from freeText) */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("paymentRemark") && (   <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Payment Remark:</p>
             <input
               type="text"
@@ -838,9 +961,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.paymentRemark}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-             <div className="flex w-full gap-x-3  justify-end">
+             {show("corporation") && (  <div className="flex w-full gap-x-3  justify-end">
           <p className="label whitespace-nowrap">Patient From Corporation:</p>
           <div className="flex gap-x-5 items-center w-[60%]">
             <div className="flex gap-x-2 items-center">
@@ -855,7 +978,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               <label className="font-normal text-[14px] text-[#2C2C2E] ">
                 In-Corporation
               </label>
-            </div>
+            </div> 
 
             <div className="flex gap-x-2 items-center">
               <input
@@ -871,7 +994,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               </label>
             </div>
           </div>
-        </div>
+        </div> )}
 
           <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Cash Type:</p>
@@ -895,7 +1018,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
             />
           </div>
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("remarks") && (  <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Remark:</p>
             <input
               type="text"
@@ -904,7 +1027,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.remarks}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">TPA Name:</p>
@@ -1018,7 +1141,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
           </div>
 
           {/* Complaints, Past family history */}
-          <div className="flex w-full gap-x-3 items-center justify-end">
+           {show("complaints") && ( <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Complaints:</p>
             <input
               type="text"
@@ -1027,9 +1150,10 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.complaints}
               onChange={handleFlatChange}
             />
-          </div>
-          <div className="flex w-full gap-x-3 items-center justify-end">
-            <p className="label">Past Family History:</p>
+          </div> )}
+
+          {show("pastFamilyHistory") && (  <div className="flex w-full gap-x-3 items-center justify-end">
+            <p className="label">Past / Family History:</p>
             <input
               type="text"
               className="input"
@@ -1037,9 +1161,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.pastFamilyHistory}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+          {show("provisionalDiagnosis") && (  <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Provisional Diagnosis:</p>
             <input
               type="text"
@@ -1048,9 +1172,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.provisionalDiagnosis}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
-          <div className="flex w-full gap-x-3 items-center justify-end">
+         {show("finalDiagnosis") && (   <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Final Diagnosis:</p>
             <input
               type="text"
@@ -1059,7 +1183,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               value={value.finalDiagnosis}
               onChange={handleFlatChange}
             />
-          </div>
+          </div> )}
 
           <div className="flex w-full gap-x-3 items-center justify-end">
             <p className="label">Final Diagnosis ICD Code:</p>
@@ -1088,21 +1212,9 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
               <button className="w-full h-[50px] rounded-[10px] bg-[#36D7A01A] border border-[#36D7A0] text-[#36D7A0] font-medium text-[16px] ">
                 Send on Whatsapp
               </button>
-              {/* <button className="w-full h-[50px] rounded-[10px] bg-[#F6EEFC] border border-[#6F3CDB] text-[#6F3CDB] font-medium text-[16px] ">
-                Show Consultant History
-              </button>
-              <button
-                onClick={() => setTransferHistory(true)}
-                className="w-full h-[50px] rounded-[10px] bg-[#FFF7F2] border border-[#FB8C5C] text-[#FB8C5C] font-medium text-[16px] cursor-pointer "
-              >
-                Show Transfer History
-              </button> */}
+             
             </div>
           </div>
-
-          {/* <TransferPatientForm/>
-
-          <ChangeConsultantForm/> */}
         </div>
       </div>
 

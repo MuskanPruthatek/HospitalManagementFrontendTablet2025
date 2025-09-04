@@ -171,14 +171,14 @@ const toBedOptions = useMemo(() => {
       <form onSubmit={handleSubmit} className="w-[100%] flex flex-col gap-y-4 my-5 pb-8 ">
         <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label ">Current Floor:</p>
-          <input type="text" className="input " value={fromFloor}
+          <input type="text" className="input2 " value={fromFloor}
           disabled />
         </div>
 
-        <div className="w-[90%] justify-end flex gap-x-3 items-center ">
+       <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label ">New Floor No:</p>
-          <div className="w-[60%] ">
-            <CustomDropdown
+          <div className="w-[100%] ">
+            <CustomDropdown label="Select New Floor"
           options={floors}
           selected={toFloor}
           onChange={setToFloor}
@@ -186,15 +186,15 @@ const toBedOptions = useMemo(() => {
           </div>
         </div>
 
-        <div className="w-[90%] justify-end flex gap-x-3 items-center ">
+        <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label ">Current Bed:</p>
-          <input type="text" className="input " value={fromBed}
+          <input type="text" className="input2 " value={fromBed}
           disabled />
         </div>
 
-        <div className="w-[90%] justify-end flex gap-x-3 items-center ">
+        <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label ">New Bed Number</p>
-          <div className="w-[60%]">
+          <div className="w-[100%]">
            <CustomDropdown
           options={toBedOptions}
           selected={toBed}
@@ -203,19 +203,19 @@ const toBedOptions = useMemo(() => {
           </div>
         </div>
 
-        <div className="w-[90%] justify-end flex gap-x-3 items-center ">
+        <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label ">Transfer Date:</p>
-          <input type="date" className="input " value={transferDate}
+          <input type="date" className="input2 " value={transferDate}
           onChange={e => setTransferDate(e.target.value)}/>
         </div>
 
-        <div className="w-[90%] justify-end flex gap-x-3 items-center ">
+       <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label ">Transfer Time:</p>
-          <input type="time" className="input " value={transferTime}
+          <input type="time" className="input2 " value={transferTime}
           onChange={e => setTransferTime(e.target.value)}/>
         </div>
 
-        <button className="w-[80%] h-[50px] rounded-[10px] mt-3 bg-[#6F3CDB] text-white font-medium text-[16px] self-center ">
+        <button className="w-[90%] h-[50px] rounded-[10px] mt-3 bg-[#6F3CDB] text-white font-medium text-[16px] self-center ">
           Transfer Patient
         </button>
       </form>

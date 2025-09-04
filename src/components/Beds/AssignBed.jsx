@@ -144,37 +144,6 @@ const AssignBed = ({ open, onClose, selectedBed2, beds, refreshBeds }) => {
     return () => window.removeEventListener('online', onBackOnline);
   }, [refreshBeds]);
 
-  // const submitAssign = async (e) => {
-  //   e.preventDefault();
-  //   if (!form.patientId || !form.admissionId || !form.bedId) return;
-
-  //   try {
-  //     setSubmitting(true);
-  //     await axios.post(ASSIGN_ENDPOINT, {
-  //       patientId: form.patientId,
-  //       admissionId: form.admissionId,
-  //       bedId: form.bedId,
-  //     });
-
-  //     // Refresh grids & patient lists outside
-  //     await refreshBeds?.();
-  //     // await fetchPatients?.();
-
-  //     onClose?.();
-  //   } catch (err) {
-  //     console.error("Assign bed failed:", err);
-  //     alert(
-  //       err?.response?.data?.message ||
-  //         err?.message ||
-  //         "Failed to assign bed. Please try again."
-  //     );
-  //   } finally {
-  //     setSubmitting(false);
-  //   }
-  // };
-
-
-
   const submitAssign = async (e) => {
   e.preventDefault();
   setSubmitting(true);
