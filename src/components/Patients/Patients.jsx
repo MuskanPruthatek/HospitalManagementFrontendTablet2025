@@ -391,7 +391,7 @@ const fullCount = filtered.length;
 
 
            <div className="w-[95%] h-[60px] bg-[#6F3CDB] left-1/2 -translate-x-1/2 px-8 absolute -bottom-15 rounded-b-[30px] flex justify-between items-center ">
-               <p className="font-semibold lg:text-[20px] md:text-[16px] text-white ">Discharge Summery Ready For Mr. Xyz </p>
+             {latest?.dischargeTemplates.length > 0 && <p className="font-semibold lg:text-[20px] md:text-[16px] text-white ">Discharge Summery Ready For {patient.identityDetails?.salutation} {patient.identityDetails?.patientName || "-"}</p> }
                <p className="font-semibold lg:text-[20px] md:text-[16px] text-white ">Billing Discharge at 25-07-2025 </p>
            </div>
 

@@ -1,7 +1,7 @@
 import { ChevronLeft, LockKeyhole, LockKeyholeOpen, Printer, Share2 } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import CustomDropdown from '../../../CustomDropDown/CustomDropdown'
+import CustomDropdown from '../../../CustomDropdown/CustomDropdown'
 import axios from 'axios'
 import JoditEditor from "jodit-react";
 import { useForm, Controller } from "react-hook-form";
@@ -15,8 +15,12 @@ const PatientCreateDischargeSummary = () => {
   const navigate = useNavigate();
   const [lock, setLock] = useState(false);
 
+  // add near other state
+    const [mode, setMode] = useState("patient"); // 'patient' | 'template'
+
     const { selectedPatient } = usePatient();
     const admissionId = selectedPatient?.admissionId;
+    const patientId = selectedPatient?.patientId
   
     const [patientData, setPatientData] = useState(null);
   
@@ -46,29 +50,6 @@ const PatientCreateDischargeSummary = () => {
     [templates]
   );
 
-  // Your form fields
-  const fields = [
-    { name: 'diagnosisICDCode', label: 'Diagnosis (Choose for ICD Code)', type: 'text' },
-    { name: 'treatment', label: 'Treatment', type: 'text' },
-    { name: 'causeOfDeath', label: 'Cause of Death', type: 'richtext' },
-    { name: 'crossConsultation', label: 'Cross Consultation', type: 'richtext' },
-    { name: 'diagnosis', label: 'Diagnosis', type: 'richtext' },
-    { name: 'chiefComplaints', label: 'Chief Complaints', type: 'richtext' },
-    { name: 'pastHistory', label: 'Past History', type: 'richtext' },
-    { name: 'courseInHospital', label: 'Course In Hospital', type: 'richtext' },
-    { name: 'investigation', label: 'Investigation', type: 'richtext' },
-    { name: 'treatmentGiven', label: 'Treatment Given', type: 'richtext' },
-    { name: 'conditionAtDischarge', label: 'Condition at the time of Discharge', type: 'richtext' },
-    { name: 'adviceAtDischarge', label: 'Advice at Discharge', type: 'richtext' },
-    { name: 'adviceOnFollowUp', label: 'Advice on Follow Up', type: 'richtext' },
-    { name: 'MLCNO', label: 'MLC No', type: 'text' },
-    { name: 'followUpDate', label: 'Follow Up Date', type: 'text' },
-    { name: 'RMO', label: 'RMO', type: 'text' },
-    { name: 'dischargeSummaryFinalizedBy', label: 'Discharge Summary Finalized By', type: 'text' },
-    { name: 'saveAsTemplate', label: 'Save as Template', type: 'text' },
-    { name: 'acknowledgment', label: 'I have been given medicines and care to be given at home. Received all the xrays, reports and discharge summary.', type: 'checkbox' },
-  ];
-
   /* ── rich-text jodit toolbar settings ── */
   const joditConfig = React.useMemo(() => ({
     readonly: lock,            // lock toggles read-only
@@ -78,31 +59,6 @@ const PatientCreateDischargeSummary = () => {
     buttons: ["bold", "italic", "eraser", "|", "ul", "ol"],
   }), [lock]);
 
-  // Default values depend on the current template (or blank for new)
-  const defaultValues = React.useMemo(() => {
-    const obj = {};
-    fields.forEach(({ name, type }) => {
-      if (type === 'checkbox') {
-        obj[name] = template?.[name] ?? false;
-      } else {
-        obj[name] = template?.[name] ?? "";
-      }
-    });
-    return obj;
-  }, [template]);
-
-  const {
-    register,
-    control,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = useForm({ defaultValues });
-
-  // IMPORTANT: whenever template changes, reset the form so fields prefill
-  React.useEffect(() => {
-    reset(defaultValues);
-  }, [defaultValues, reset]);
 
   // Fetch templates once
   const fetchDischargeTemplates = async () => {
@@ -128,41 +84,12 @@ const PatientCreateDischargeSummary = () => {
     fetchDischargeTemplates();
   }, []);
 
-  // When user picks a label in dropdown, convert to id and load that template
   const handleTemplateSelect = (id) => {
-    setSelectedTemplateId(id);
-    setTemplate(templatesById[id] || null);
-  };
+  setSelectedTemplateId(id);
+  setTemplate(templatesById[id] || null);
+  setMode("patient"); // selecting a template doesn't mean editing it yet
+};
 
-  /* ── submit ── */
-  const onSubmit = async (data) => {
-    try {
-      const payload = { ...data };
-      if (template?._id) {
-        // Update existing
-        await axios.put(
-          `${VITE_APP_SERVER}/api/v1/document-master/dischargetemplate-master/${template._id}`,
-          payload
-        );
-        alert("Template updated");
-      } else {
-        // Create new
-        await axios.post(
-          `${VITE_APP_SERVER}/api/v1/document-master/dischargetemplate-master`,
-          payload
-        );
-        alert("Template created");
-      }
-      // Refresh the list and keep selection in sync
-      await fetchDischargeTemplates();
-      if (template?._id) {
-        setSelectedTemplateId(template._id);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save template");
-    }
-  };
 
     function pickAdmission(p) {
     if (!Array.isArray(p?.admissionDetails)) return {};
@@ -172,6 +99,135 @@ const PatientCreateDischargeSummary = () => {
   }
 
   const ad = pickAdmission(patientData);
+
+    const [list, setList] = useState([])
+
+  const buildDefaults = (fields, tpl) => {
+  const obj = {};
+  fields.forEach(({ name, type }) => {
+    // sensible defaults per type
+    const v = tpl?.[name];
+    if (type === "checkbox") {
+      obj[name] = typeof v === "boolean" ? v : !!v; // coerce
+    } else {
+      obj[name] = v ?? ""; // text/richtext/select
+    }
+  });
+  return obj;
+};
+
+// ⬇️ replace your defaultValues/useForm block with this:
+const {
+  register,
+  control,
+  handleSubmit,
+  reset,
+  formState: { isSubmitting },
+} = useForm({
+  defaultValues: buildDefaults(list, template),
+});
+
+// ⬇️ whenever list or template changes, push values into the form
+useEffect(() => {
+  if (!list.length) return;
+  reset(buildDefaults(list, template));
+}, [list, template, reset]);
+
+// ⬇️ add this to decide visibility when status is false but data exists
+const hasAnyData = (name) => {
+  const v = template?.[name]; // using template since it's the source when editing
+  if (v == null) return false;
+  if (typeof v === "string") return v.trim() !== "";
+  if (typeof v === "boolean") return v;       // checkbox stored as boolean
+  if (typeof v === "number") return true;
+  if (typeof File !== "undefined" && v instanceof File) return v.size > 0;
+  if (typeof Blob !== "undefined" && v instanceof Blob) return v.size > 0;
+  if (typeof v === "object") {
+    return Object.values(v).some((x) => hasAnyData(name, x)); // fallback
+  }
+  return Boolean(v);
+};
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const response = await axios.get(
+          `${VITE_APP_SERVER}/api/v1/document-master/dischargefield-master`
+        );
+        setList(response.data.data);
+        console.log(response.data.data);
+      } catch (err) {
+        console.error(err);
+        console.log(err.response?.data?.message || err.message);
+      }
+    })();
+  }, []);
+
+
+  /* ── RHF set‑up ── */
+  const defaultValues = React.useMemo(() => {
+    const obj = {};
+    list.forEach(({ name }) => (obj[name] = template?.[name] ?? ""));
+    return obj;
+  }, [template]);
+
+    // IMPORTANT: whenever template changes, reset the form so fields prefill
+  React.useEffect(() => {
+    reset(defaultValues);
+  }, [defaultValues, reset]);
+
+const hasValue = (v) => {
+  if (v == null) return false;
+  if (typeof v === "string") return v.trim() !== "";
+  if (typeof v === "boolean") return true;      // <— include true or false
+  if (typeof v === "number") return !Number.isNaN(v);
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof File !== "undefined" && v instanceof File) return v.size > 0;
+  if (typeof Blob !== "undefined" && v instanceof Blob) return v.size > 0;
+  if (typeof v === "object") return Object.keys(v).length > 0;
+  return Boolean(v);
+};
+
+const onSubmit = async (data) => {
+  try {
+    const allowed = new Set(list.map(f => f.name));
+    const payload = Object.fromEntries(
+      Object.entries(data).filter(([k, v]) => allowed.has(k) && hasValue(v))
+    );
+
+    if (mode === "template") {
+      // edit the selected master template
+      if (!template?._id) {
+        alert("No template selected to edit.");
+        return;
+      }
+      await axios.put(
+        `${VITE_APP_SERVER}/api/v1/document-master/dischargetemplate-master/${template._id}`,
+        payload
+      );
+      alert("Template updated.");
+    } else {
+      // save for the patient/admission
+      const pid = selectedPatient?.patientId;
+      const aid = admissionId;
+      if (!pid || !aid) {
+        alert("Missing patient/admission.");
+        return;
+      }
+      // optional: include which template was used as source
+      const body = { ...payload, templateId: selectedTemplateId || template?._id || null };
+
+      await axios.post(
+        `${VITE_APP_SERVER}/api/v1/patient/discharge-template/${pid}/${aid}`,
+        body
+      );
+      alert("Discharge summary saved for patient.");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Failed to save.");
+  }
+};
 
   return (
     <div className="w-full h-full bg-white font-inter">
@@ -231,19 +287,20 @@ const PatientCreateDischargeSummary = () => {
 
           {/* EDIT TEMPLATE */}
           <button
-            className='w-fit h-[50px] px-3 rounded-[10px] bg-[#FB8C5C] text-[#FDFDFD] font-semibold text-[16px] '
-            onClick={() => {
-              if (!selectedTemplateId) {
-                alert("Please select a template first.");
-                return;
-              }
-              // In case user picked after load; ensure form shows that template
-              const t = templatesById[selectedTemplateId];
-              setTemplate(t || null); // triggers reset via effect
-            }}
-          >
-            Edit Template
-          </button>
+  className='editTemplate w-fit h-[50px] px-3 rounded-[10px] bg-[#FB8C5C] text-[#FDFDFD] font-semibold text-[16px]'
+  onClick={() => {
+    if (!selectedTemplateId) {
+      alert("Please select a template first.");
+      return;
+    }
+    const t = templatesById[selectedTemplateId];
+    setTemplate(t || null); // ensure the chosen template is loaded
+    setMode("template");    // <<— now we're editing the master template
+  }}
+>
+  Edit Template
+</button>
+
         </div>
       </div>
 
@@ -283,10 +340,19 @@ const PatientCreateDischargeSummary = () => {
           onSubmit={handleSubmit(onSubmit)}
           className="grid grid-cols-2 border border-[#C4C8D2] divide-y divide-gray-200 mt-5"
         >
-          {fields.map(({ name, label, type }) => {
-            const isText = type === "text";
-            const isRich = type === "richtext";
-            const isCheckbox = type === "checkbox";
+           {list.filter((f) => f.status || hasAnyData(f.name))
+            .map(({ name, label, type }) => {
+              const isText = type === "text";
+              const isSelect = type === "select";
+              const isSelect2 = type === "select2";
+              const isRich = type === "richtext";
+              const isCheckbox = type === "checkbox";
+
+              const finalLabel =
+      String(label || "").trim().toLowerCase() === "acknowledgement"
+        ? "I have been given medicines and care to be given at home. Received all the xrays, reports and discharge summary"
+        : label;
+
 
             return (
               <React.Fragment key={name}>
@@ -294,7 +360,7 @@ const PatientCreateDischargeSummary = () => {
                   htmlFor={name}
                   className="px-4 py-3 text-sm font-medium bg-white border-b border-r border-[#C4C8D2]"
                 >
-                  {label}
+                  {finalLabel}
                 </label>
 
                 <div className="px-4 py-3 bg-white border-b border-[#C4C8D2]">
@@ -350,7 +416,7 @@ const PatientCreateDischargeSummary = () => {
               disabled={isSubmitting}
               className="w-fit h-[40px] px-5 rounded-[8px] bg-[#6F3CDB] text-white font-semibold text-[15px] disabled:opacity-50"
             >
-              {template?._id ? "Update" : "Save"}
+              {mode === "template" ? "Update Template" : "Save for Patient"}
             </button>
           </div>
         </form>
