@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import React, { useState } from 'react'
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 
-const ReferredDoctorCreateForm = ({addNewReferred, setAddNewReferred, fetchReferredDoctors}) => {
+const ReferredDoctorCreateForm = ({addNewReferred, setAddNewReferred}) => {
 
       const [selectedDoctor, setSelectedDoctor] = useState("")
       const [doctors, setDoctors] = useState("")
@@ -58,7 +58,7 @@ const ReferredDoctorCreateForm = ({addNewReferred, setAddNewReferred, fetchRefer
         status: false,
       });
       setSelectedDoctor(""); // reset edit flag
-      fetchReferredDoctors()
+      // fetchReferredDoctors()
     } catch (err) {
       console.error("Save failed", err);
       alert(err.response?.data?.message || "Something went wrong");

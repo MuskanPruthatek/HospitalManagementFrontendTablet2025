@@ -8,11 +8,18 @@ import { EMPTY } from "./Helpers/helperFunctions";
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 const REG_ENDPOINT = `${VITE_APP_SERVER}/api/v1/patient`;
 
+import { queueRequest, drainOutbox } from "../../offline/helpers";
+import { useOnline } from "../../offline/useOnline";
+import { v4 as uuid } from "uuid";
+import { senders } from "../../offline/senders";
 
 
 const RegisterPatient = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState("Identity Details");
+
+  const online = useOnline();
+
 
 const validate = () => {
   const { emergencyNo, relativeDetails } = data.admissionDetails;
@@ -24,7 +31,7 @@ const validate = () => {
   const isValidPAN = v => /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v);
 
   // required numbers
-  if (!isTenDigits(emergencyNo))   return alert("Emergency no must be 10 digits"), false;
+  // if (!isTenDigits(emergencyNo))   return alert("Emergency no must be 10 digits"), false;
   if (!isTenDigits(contactNo))     return alert("Contact no must be 10 digits"), false;
 
   // optional numbers – validate only if user entered something
@@ -69,27 +76,106 @@ const validate = () => {
 
   const [loading, setLoading] = useState(false)
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true)
-    if (!validate()) return;
+  // const onSubmit = async (e) => {
+  //   e.preventDefault();
+  //   setLoading(true)
+  //   if (!validate()) return;
 
-    const fd = new FormData();
-    appendNested(fd, data);
+  //   const fd = new FormData();
+  //   appendNested(fd, data);
 
-    try {
-      
-      await axios.post(REG_ENDPOINT, fd);
+  //   try {
+  //     await axios.post(REG_ENDPOINT, fd);
+  //     alert("Patient registered successfully!");
+  //     setData(EMPTY);
+  //     setTab("Identity Details");
+  //   } catch (err) {
+  //     console.error(err);
+  //     alert("Registration failed – check console.");
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // };
+
+// utils/formdata-serialize.js
+ const serializeFormData = async(fd) => {
+  // FormData values can be string or File/Blob
+  const parts = [];
+  for (const [key, val] of fd.entries()) {
+    if (val instanceof File || val instanceof Blob) {
+      // Blobs/Files *are* structured-cloneable, so we can store them directly
+      parts.push({
+        key,
+        kind: "file",
+        // store the blob and minimal file metadata
+        blob: val, // Dexie/IDB can store blobs
+        name: val instanceof File ? val.name : "blob",
+        type: val.type || "",
+        lastModified: val instanceof File ? val.lastModified : undefined,
+      });
+    } else {
+      parts.push({ key, kind: "text", value: String(val) });
+    }
+  }
+  return { kind: "FormDataV1", parts };
+}
+
+const onSubmit = async (e) => {
+  e.preventDefault();
+  if (!validate()) return;
+  setLoading(true);
+
+  const fd = new FormData();
+  appendNested(fd, data);
+
+  const endpoint = REG_ENDPOINT;
+  const collection = "patientRegister";
+
+  try {
+    if (online) {
+      await axios.post(endpoint, fd, {
+        headers: { },
+      });
+      await drainOutbox(senders); // optional
       alert("Patient registered successfully!");
       setData(EMPTY);
       setTab("Identity Details");
-    } catch (err) {
-      console.error(err);
-      alert("Registration failed – check console.");
-    } finally {
-      setLoading(false)
+    } else {
+      const dto = await serializeFormData(fd); // <<< serialize here
+      await queueRequest({
+        id: uuid(),
+        collection,
+        endpoint,
+        method: "POST",
+        dto, // <<< store JSON-friendly DTO
+        meta: { sender: 'auto' }, // your sender will rebuild FormData
+      });
+      alert("You are offline. The registration will auto-submit when online.");
+      setData(EMPTY);
+      setTab("Identity Details");
     }
-  };
+  } catch (err) {
+    if (!err?.response) {
+      const dto = await serializeFormData(fd);
+      await queueRequest({
+        id: uuid(),
+        collection,
+        endpoint,
+        method: "POST",
+        dto,
+        meta: { sender: "auto" },
+      });
+      alert("Network issue. Registration queued and will auto-submit when online.");
+      setData(EMPTY);
+      setTab("Identity Details");
+    } else {
+      console.error(err);
+      alert(err?.response?.data?.message || "Registration failed. Please try again.");
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="w-[100%] bg-[#F4F6FA] h-[95%] px-8 py-4   font-inter relative ">

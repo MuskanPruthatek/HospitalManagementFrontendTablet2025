@@ -7,7 +7,7 @@ const CustomDropdown = ({ options = [], selected, onChange, label }) => {
 
   const filteredOptions = useMemo(() => {
     return options.filter((opt) =>
-      opt.toLowerCase().includes(search.toLowerCase())
+      String(opt).toLowerCase().includes(search.toLowerCase())
     );
   }, [search, options]);
 

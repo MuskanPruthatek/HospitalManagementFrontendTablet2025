@@ -73,6 +73,50 @@ export async function drainOutbox(senders) {
   return { processed, byCollection };
 }
 
+
+// offline/senders.js
+export async function buildBodyFromDTO(dto) {
+  if (dto?.kind === "FormDataV1" && Array.isArray(dto.parts)) {
+    const fd = new FormData();
+    for (const p of dto.parts) {
+      if (p.kind === "text") {
+        fd.append(p.key, p.value);
+      } else if (p.kind === "file") {
+        // Recreate a File when possible (keeps filename); Blob is fine if File isn't needed
+        const file =
+          typeof File !== "undefined"
+            ? new File([p.blob], p.name || "file", {
+                type: p.type || "",
+                lastModified: p.lastModified || Date.now(),
+              })
+            : p.blob;
+        fd.append(p.key, file);
+      }
+    }
+    return { body: fd, headers: undefined }; // let browser set multipart boundary
+  }
+
+  // default JSON
+  return {
+    body: JSON.stringify(dto),
+    headers: { "Content-Type": "application/json" },
+  };
+}
+
+// Example sender that uses the builder:
+export async function genericSender(job) {
+  const { body, headers } = await buildBodyFromDTO(job.dto);
+  const res = await fetch(job.endpoint, {
+    method: job.method || "POST",
+    headers,
+    body,
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res;
+}
+
+
 // --- events you can fire so UI can update without polling ---
 const OUTBOX_CHANGED_EVT = "outbox:changed";
 export const signalOutboxChanged = () => {

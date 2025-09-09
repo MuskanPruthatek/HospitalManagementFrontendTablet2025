@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import CustomDropdown from "../CustomDropDown/CustomDropdown";
+import CustomDropdown from "../CustomDropdown/CustomDropdown";
 import axios from "axios";
 import Camera2 from "./Camera2";
+import { fetchWithCache } from "../../offline/fetchWithCache";
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 //
 
@@ -61,7 +62,7 @@ const IdentityDetailsForm = ({ value, onChange }) => {
     let years = now.getFullYear() - dob.getFullYear();
     let months = now.getMonth() - dob.getMonth();
 
-    if (now.getDate() < dob.getDate()) months -= 1;           // adjust for day
+    if (now.getDate() < dob.getDate()) months -= 1;
     if (months < 0) {
       years -= 1;
       months += 12;
@@ -102,33 +103,30 @@ const IdentityDetailsForm = ({ value, onChange }) => {
 
   useEffect(() => {
     fetchPatients();
+    fetchIdentityFields()
   }, []);
 
-  const fetchPatients = async () => {
-    try {
-      const response = await axios.get(`${VITE_APP_SERVER}/api/v1/patient`);
-      setPatients(response.data.data);
-    } catch (error) {
-      console.error("Error fetching patients", error);
-    }
-  };
+    const fetchPatients = (forceOnline = false) =>
+    fetchWithCache({
+      collection: "patients",
+      url: `${VITE_APP_SERVER}/api/v1/patient`,
+      setItems: setPatients,
+      forceOnline,           
+    });
 
   const patientOptions = patients.map(labelFor);
 
 
   const [identityFields, setIdentityFields] = useState([]);
-  useEffect(() => {
-    (async () => {
-      try {
-        // replace endpoint if different; using your sample response shape
-        const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/document-master/admissionform-master`);
-        setIdentityFields(data.data || []);
-      } catch (e) {
-        console.error("Failed to fetch admission fields", e);
-        setIdentityFields([]); // fall back to default-true behavior
-      }
-    })();
-  }, []);
+
+      const fetchIdentityFields = (forceOnline = false) =>
+    fetchWithCache({
+      collection: "admissionFields",
+      url: `${VITE_APP_SERVER}/api/v1/document-master/admissionform-master`,
+      setItems: setIdentityFields,
+      forceOnline,           
+    });
+
   const { show } = useAdmissionFlags(identityFields);
 
   return (

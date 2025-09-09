@@ -1,7 +1,7 @@
 import axios from "axios";
 import React, { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-import CustomDropdown from "../CustomDropDown/CustomDropdown";
+import CustomDropdown from "../CustomDropdown/CustomDropdown";
 
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 const endpoint = `${VITE_APP_SERVER}/api/v1/patient/assign-bed`; 

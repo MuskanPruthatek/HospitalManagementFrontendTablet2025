@@ -1,253 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import CustomDropdown from "../CustomDropDown/CustomDropdown";
+import CustomDropdown from "../CustomDropdown/CustomDropdown";
 import axios from "axios";
 import Camera from "./Camera";
 import ReferredDoctorCreateForm from "./ReferredDoctorCreateForm";
+import { FIELD_BINDINGS } from "./Helpers/fieldBindings";
+import { useAdmissionFlags } from "./Helpers/useAdmissionFlags";
+import usePatientMaster from "./Helpers/usePatientMaster";
+import { fetchWithCache } from "../../offline/fetchWithCache";
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
-//
-const FIELD_BINDINGS = {
-  // Location & bed
-  bedDepartment: "Bed Department",
-
-  // Vitals / basics
-  weight: "Weight",
-  height: "Patient Height",
-  bloodGroup: "Blood Group",
-  patientType: "Patient Type (New/Old)",
-
-  // Administrative / status
-  applicableClass: "Applicable Class",
-  emergencyNo: "Emergency No",
-
-  // Doctors & referrals
-
-  referredByDoctorId: "Referred by Doctor",
-  referralFromDoctor: "Referral from Doctor",
-  referredByDoctorSelectBox: "Referred by Doctor Select Box",
-  otherConsultant: "Other Consultants",
-
-  // MLC
-  mlcType: "Patient MLC Type",
-  mlcNo: "MLC No",
-
-  // Neonatal / maternity specifics
-  birthAsphyxiaAndNICUShifted: "Birth asphyxia & NICU shifted",
-  termOfBaby: "Term of baby",
-  modeOfDelivery: "Mode of Delivery",
-  babyIllness: "Baby Illness",
-  husbandName: "Husband Name",
-  foodPreference: "Food Preference",
-  birthTime: "Birth Time",
-  motherAge: "Mother Age",
-
-  // Procedures / labs / reports
-  operations: "Operations",
-  laboratorySelectionId: "Laboratory Selection",
-  covidReport: "Covid Report",
-  vaccinationDetails: "Vaccination Details",
-
-  // Discharge checklists
-  clinicalDischarge: "Clinical Discharge",
-  billingDischarge: "Billing Discharge",
-  pharmacyDischarge: "Pharmacy Discharge",
-  labDischarge: "Lab Discharge",
-
-  // Misc feature toggles
-  maintainMRDFileStatus: "Maintain MRD File Status",
-  addDietModule: "Add Diet Module",
-  useClinicalScoreCalculator: "Use Clinical Score Calculator",
-  CPT: "CPT",
-
-  // Relative / attendant details (group toggle)
-  relativeDetails: "Relative Details (Attendant)", // controls responsiblePerson, relationship, relativeContactNo
-
-  // Employer / finance
-  employerCompanyName: "Employer Company Name",
-  TIDNumber: "TID Number",
-  paymentMode: "Payment Mode Options",
-  paymentRemark: "Payment Remark",
-  corporation: "Patient from Corporation",
-
-  // Notes / diagnoses
-  complaints: "Complaints",
-  pastFamilyHistory: "Past/Family History",
-  provisionalDiagnosis: "Provisional Diagnosis",
-  finalDiagnosis: "Final Diagnosis",
-  remarks: "Remark",
-
-  // Media
-  patientPhoto: "Patient Photo",
-};
-
-function useAdmissionFlags(fields = []) {
-  const lookup = useMemo(() => {
-    const m = new Map();
-    for (const f of fields) {
-      m.set((f.fieldName || "").trim().toLowerCase(), !!f.status);
-    }
-    return m;
-  }, [fields]);
-
-  const showByFieldName = (name, fallback = true) => {
-    const key = (name || "").trim().toLowerCase();
-    return lookup.has(key) ? lookup.get(key) : fallback; // default to visible if not configured
-  };
-
-  const show = (uiKey, fallback = true) => {
-    const bound = FIELD_BINDINGS[uiKey] ?? uiKey;
-    if (Array.isArray(bound)) {
-      // visible if ANY bound field is enabled; switch to .every if you want ALL required
-      return bound.some((n) => showByFieldName(n, fallback));
-    }
-    return showByFieldName(bound, fallback);
-  };
-
-  return { show };
-}
-
 
 const AdmissionDetailsForm = ({ value, onChange }) => {
   const [addNewReferred, setAddNewReferred] = useState(false);
-  const [transferHistory, setTransferHistory] = useState(false);
-  const [floors, setFloors] = useState([]);
-  const [beds, setBeds] = useState([]);
-  const [floorMap, setFloorMap] = useState({});
-  const [selectedFloor, setSelectedFloor] = useState("");
-  const [bedMap, setBedMap] = useState({});
-
-  /* ───── dropdown maps (label ↔ id) ───── */
-  const [reasonOpts, setReasonOpts] = useState([]); // ["Medical", …]
-  const [reasonL2I, setReasonL2I] = useState({}); // label → id
-  const [reasonI2L, setReasonI2L] = useState({}); // id    → label
-
-  const [doctorOpts, setDoctorOpts] = useState([]);
-  const [doctorL2I, setDoctorL2I] = useState({});
-  const [doctorI2L, setDoctorI2L] = useState({});
-
-  const [refOpts, setRefOpts] = useState([]);
-  const [refL2I, setRefL2I] = useState({});
-  const [refI2L, setRefI2L] = useState({});
-
-  const [labOpts, setLabOpts] = useState([]);
-  const [labL2I, setLabL2I] = useState({});
-  const [labI2L, setLabI2L] = useState({});
-
-  useEffect(() => {
-    fetchReferredDoctors();
-    fetchAdmissionReasons();
-    fetchDoctors();
-    fetchLabs()
-  }, []);
-
-  /*  ░░ floors ░░ */
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await axios.get(
-          `${VITE_APP_SERVER}/api/v1/hospital-master/floor-master`
-        );
-        //   [{ _id, floorName }]
-        setFloors(data.data.map((f) => f.floorName));
-        setFloorMap(
-          Object.fromEntries(data.data.map((f) => [f.floorName, f._id]))
-        );
-      } catch (err) {
-        /* … */
-      }
-    })();
-  }, []);
-
-  /*  ░░ beds ░░ */
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await axios.get(
-          `${VITE_APP_SERVER}/api/v1/hospital-master/bed-master/vacant`
-        );
-        //   [{ _id, bedName, floorDetails }] ← assumes this shape
-
-        setBeds(data.data);
-        setBedMap(Object.fromEntries(data.data.map((b) => [b.bedName, b._id])));
-      } catch (err) {
-        /* … */
-      }
-    })();
-  }, []);
-
-  const fetchAdmissionReasons = async () => {
-    const { data } = await axios.get(
-      `${VITE_APP_SERVER}/api/v1/admission-reason`
-    );
-    const labels = data.data.map((r) => r.admissionReason);
-    const l2i = Object.fromEntries(
-      data.data.map((r) => [r.admissionReason, r._id])
-    );
-    const i2l = Object.fromEntries(
-      data.data.map((r) => [r._id, r.admissionReason])
-    );
-    setReasonOpts(labels);
-    setReasonL2I(l2i);
-    setReasonI2L(i2l);
-  };
-
-  const fetchDoctors = async () => {
-    const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/doctor-master`);
-    const labels = data.data.map((d) => d.doctorName);
-    const l2i = Object.fromEntries(data.data.map((d) => [d.doctorName, d._id]));
-    const i2l = Object.fromEntries(data.data.map((d) => [d._id, d.doctorName]));
-    setDoctorOpts(labels);
-    setDoctorL2I(l2i);
-    setDoctorI2L(i2l);
-  };
-
-  const fetchReferredDoctors = async () => {
-    const { data } = await axios.get(
-      `${VITE_APP_SERVER}/api/v1/doctor-master/referred-doctor/all`
-    );
-    const labels = data.data.map((d) => d.doctorName);
-    const l2i = Object.fromEntries(data.data.map((d) => [d.doctorName, d._id]));
-    const i2l = Object.fromEntries(data.data.map((d) => [d._id, d.doctorName]));
-    setRefOpts(labels);
-    setRefL2I(l2i);
-    setRefI2L(i2l);
-  };
-
-  const fetchLabs = async () => {
-    const { data } = await axios.get(
-      `${VITE_APP_SERVER}/api/v1/hospital-master/lab-master`
-    );
-    const labels = data.data.map((l) => l.labName);
-    const l2i = Object.fromEntries(data.data.map((l) => [l.labName, l._id]));
-    const i2l = Object.fromEntries(data.data.map((l) => [l._id, l.labName]));
-    setLabOpts(labels);
-    setLabL2I(l2i);
-    setLabI2L(i2l);
-  };
-
-  const bedOptions = useMemo(() => {
-    if (!selectedFloor) {
-      return beds.map((b) => b.bedName);
-    }
-
-    const selFloorId = floorMap[selectedFloor]; // e.g. "686ce0b15a4e91cde6bffe3a"
-
-    return beds
-      .filter((b) => {
-        // Normalize b.floorId → raw ID string
-        const bedFloorId =
-          typeof b.floorId === "object" ? b.floorId._id : b.floorId;
-        return bedFloorId === selFloorId;
-      })
-      .map((b) => b.bedName);
-  }, [beds, selectedFloor, floorMap]);
-
-  useEffect(() => {
-    console.log("floors:", floors, floorMap);
-    console.log(
-      "beds:",
-      beds.map((b) => b.floorDetails)
-    );
-  }, [floors, beds]);
 
   const handleFlatChange = (e) => {
     const { name, type, value: v, checked, files } = e.target;
@@ -274,23 +37,35 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
     });
   };
   
+    useEffect(() => {
+      fetchAdmissionFields()
+    }, []);
+
   const [admissionFields, setAdmissionFields] = useState([]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        // replace endpoint if different; using your sample response shape
-        const { data } = await axios.get( `${VITE_APP_SERVER}/api/v1/document-master/admissionform-master`);
-        setAdmissionFields(data.data || []);
-      } catch (e) {
-        console.error("Failed to fetch admission fields", e);
-        setAdmissionFields([]); // fall back to default-true behavior
-      }
-    })();
-  }, []);
-
+   const fetchAdmissionFields = (forceOnline = false) =>
+      fetchWithCache({
+        collection: "admissionFields",
+        url: `${VITE_APP_SERVER}/api/v1/document-master/admissionform-master`,
+        setItems: setAdmissionFields,
+        forceOnline,           
+      });
   
   const { show } = useAdmissionFlags(admissionFields);
+
+// inside component:
+const [selectedFloor, setSelectedFloor] = useState("");
+
+const {
+  floors, beds, floorMap, bedMap,
+  reasonOpts, reasonL2I, reasonI2L,
+  doctorOpts, doctorL2I, doctorI2L,
+  refOpts, refL2I, refI2L,
+  labOpts, labL2I, labI2L,
+  bedOptions, floorOptions,
+  fetchBeds, fetchFloors, fetchDoctors, fetchReferredDoctors, fetchLabs, fetchAdmissionReasons,
+  loading,
+} = usePatientMaster(selectedFloor);
 
   return (
     <div className="w-full relative mt-5 pb-6 ">
@@ -339,14 +114,15 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
             <p className="label ">Floor Number:</p>
             <div className="w-[60%] ">
               <CustomDropdown label="Select Floor"
-                options={floors}
+                options={floorOptions}
+                
                 selected={
-                  floors.find((l) => floorMap[l] === value.floorId) || ""
-                }
-                onChange={(label) => {
-                  onChange({ floorId: floorMap[label], bedId: "" });
-                  setSelectedFloor(label);
-                }}
+    Object.keys(floorMap).find(k => floorMap[k] === value.floorId) || ""
+  }
+  onChange={(label) => {
+    onChange({ floorId: floorMap[label], bedId: "" });
+    setSelectedFloor(label);        
+  }}
               />
             </div>
           </div>
@@ -428,7 +204,7 @@ const AdmissionDetailsForm = ({ value, onChange }) => {
           {show("patientStatus") && (  <div className="flex w-full gap-x-3 items-center justify-end ">
             <p className="label ">Patient Status:</p>
             <div className="w-[60%]">
-              <CustomDropdown label="Select Patint Status"
+              <CustomDropdown label="Select Patient Status"
                 options={["Admitted", "Discharged"]}
                 selected={value.patientStatus}
                 onChange={(label) => onChange({ patientStatus: label })}

@@ -1,7 +1,28 @@
-// /src/offline/senders.js
 import axios from "axios";
 
-// Reusable: turn a DTO into FormData (supports nested objects + optional files)
+/* ---------- helpers ---------- */
+
+// rebuild FormData from the serialized { kind:'FormDataV1', parts: [...] }
+function formDataFromParts(dto) {
+  const fd = new FormData();
+  for (const p of dto.parts || []) {
+    if (p.kind === "text") {
+      fd.append(p.key, p.value);
+    } else if (p.kind === "file") {
+      const file =
+        typeof File !== "undefined"
+          ? new File([p.blob], p.name || "file", {
+              type: p.type || "",
+              lastModified: p.lastModified || Date.now(),
+            })
+          : p.blob;
+      fd.append(p.key, file);
+    }
+  }
+  return fd;
+}
+
+// Existing: build FormData from { data, files } DTO shape (kept as-is)
 export function dtoToFormData(dto) {
   const fd = new FormData();
 
@@ -26,44 +47,117 @@ export function dtoToFormData(dto) {
   return fd;
 }
 
-/** Generic senders you can reuse everywhere */
+// Choose body & headers from any dto shape
+function buildRequestPayload(row) {
+  const method = row.method || "POST";
+
+  // If someone already passed a native FormData, just use it.
+  if (row.dto instanceof FormData) {
+    return { method, data: row.dto, headers: undefined };
+  }
+
+  // Our serialized formdata path
+  const isV1 = row?.dto?.kind === "FormDataV1" && Array.isArray(row?.dto?.parts);
+  if (isV1) {
+    const fd = formDataFromParts(row.dto);
+    return { method, data: fd, headers: undefined }; // let browser set boundary
+  }
+
+  // Legacy/form-style dto
+  const forceFD = row?.meta?.asFormData === true;
+  const hasFiles = Array.isArray(row?.dto?.files) && row.dto.files.length > 0;
+  if (forceFD || hasFiles) {
+    const fd = dtoToFormData(row.dto);
+    return { method, data: fd, headers: undefined };
+  }
+
+  // Default JSON
+  return {
+    method,
+    data: row.dto,
+    headers: { "Content-Type": "application/json" },
+  };
+}
+
+/* ---------- generic senders ---------- */
+
 export const senders = {
-  // Auto-pick JSON or FormData
+  // Smart auto picker (covers FormDataV1, native FormData, {data,files}, and JSON)
   auto: async (row) => {
-    const forceFD = row?.meta?.asFormData === true;
-    const hasFiles = Array.isArray(row?.dto?.files) && row.dto.files.length > 0;
-    if (forceFD || hasFiles) {
-      const fd = dtoToFormData(row.dto);
-      await axios.post(row.endpoint, fd);
-    } else {
-      await axios.post(row.endpoint, row.dto);
-    }
+    const { method, data, headers } = buildRequestPayload(row);
+    await axios({
+      url: row.endpoint,
+      method,
+      data,
+      headers,
+      withCredentials: true,
+    });
   },
 
-  // Explicit styles (if you want to force one)
   genericJSON: async (row) => {
-    await axios.post(row.endpoint, row.dto);
-  },
-  genericFormData: async (row) => {
-    const fd = dtoToFormData(row.dto);
-    await axios.post(row.endpoint, fd);
+    const method = row.method || "POST";
+    await axios({
+      url: row.endpoint,
+      method,
+      data: row.dto,
+      headers: { "Content-Type": "application/json" },
+      withCredentials: true,
+    });
   },
 
-  // Optional legacy/special keys you already used:
+  genericFormData: async (row) => {
+    const { method, data } =
+      row?.dto?.kind === "FormDataV1"
+        ? { method: row.method || "POST", data: formDataFromParts(row.dto) }
+        : { method: row.method || "POST", data: dtoToFormData(row.dto) };
+
+    await axios({
+      url: row.endpoint,
+      method,
+      data,
+      // no Content-Type → browser sets multipart boundary
+      withCredentials: true,
+    });
+  },
+
+  // Optional aliases that force multipart
   patientReg: async (row) => {
-    const fd = dtoToFormData(row.dto);
-    await axios.post(row.endpoint, fd);
+    // ensure multipart even if dto is FormDataV1
+    const fd =
+      row?.dto?.kind === "FormDataV1" ? formDataFromParts(row.dto) : dtoToFormData(row.dto);
+    await axios({
+      url: row.endpoint,
+      method: row.method || "POST",
+      data: fd,
+      withCredentials: true,
+    });
   },
+
   beds: async (row) => {
-    await axios.post(row.endpoint, row.dto);
+    // JSON sender
+    await axios({
+      url: row.endpoint,
+      method: row.method || "POST",
+      data: row.dto,
+      headers: { "Content-Type": "application/json" },
+      withCredentials: true,
+    });
   },
+
   labReports: async (row) => {
-    const fd = dtoToFormData(row.dto);
-    await axios.post(row.endpoint, fd);
+    const fd =
+      row?.dto?.kind === "FormDataV1" ? formDataFromParts(row.dto) : dtoToFormData(row.dto);
+    await axios({
+      url: row.endpoint,
+      method: row.method || "POST",
+      data: fd,
+      withCredentials: true,
+    });
   },
+
+  // keep your special schedules example (uses DELETE) if you still need it:
   schedules: async (req) => {
-    // req = { id, module, op, method, url, body, headers }
-    await axios.delete(req.url, { headers: req.headers || {} });
+    await axios.delete(req.url, { headers: req.headers || {}, withCredentials: true });
     return { success: true };
   },
 };

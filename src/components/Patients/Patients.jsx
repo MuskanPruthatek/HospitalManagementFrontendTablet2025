@@ -6,10 +6,12 @@ import { filterPatients } from "./Helpers/patientFilters";
 import { getLatestAdmission } from "./Helpers/getLatestAdmission"
 import { Link } from "react-router-dom";
 import { usePatient } from "../../context/PatientContext";
-import CustomDropdown from "../CustomDropDown/CustomDropdown";
+import CustomDropdown from "../CustomDropdown/CustomDropdown"
 import { loadCache, saveCache } from "../../offline/cache";
 import { isOnline } from "../../offline/helpers";
 import { fetchWithCache } from "../../offline/fetchWithCache";
+import { calculateStayDuration } from "../../Helpers/calculateStayDuration";
+import {formatDate} from "../../Helpers/formatDate"
 
 const Patients = () => {
 
@@ -349,7 +351,7 @@ const fullCount = filtered.length;
                      <p className="font-extrabold lg:text-[26px] md:text-[24px] text-[#6F3CDB] ">{latest?.bedId?.bedName || "-"}</p>
                 </div>
 
-                <p className="font-semibold lg:text-[20px] md:text-[18px] text-[#ED1F22] ">3 Days 11 hrs 21 min</p>
+                <p className="font-semibold lg:text-[20px] md:text-[18px] text-[#ED1F22] "> {latest?.finalDischargeDate && calculateStayDuration(latest?.admissionDate, latest?.admissionTime, latest?.finalDischargeDate, latest?.finalDischargeTime)}</p>
               </div>
 
 
@@ -370,7 +372,7 @@ const fullCount = filtered.length;
                   <div className="lg:w-[100px] lg:h-[100px] relative md:w-[70px] md:h-[70px] rounded-full bg-[#FB8C5C] flex justify-center items-center ">
                     <div className="lg:w-[38px] lg:h-[38px] md:w-[26px] md:h-[26px] absolute lg:-right-1 lg:-top-2 
                     md:right-0 md:-top-1 rounded-full bg-[#ED1F22] border-[4px] border-[#FDFDFD] flex justify-center items-center ">
-                      <p className="font-bold lg:text-[18px] md:text-[12px] text-white ">1</p>
+                      {/* <p className="font-bold lg:text-[18px] md:text-[12px] text-white ">1</p> */}
                     </div>
                     <img src="/assets/folder.svg" className="lg:w-[40px] lg:h-[40px] md:w-[30px] md:h-[30px] "/>
                 </div>
@@ -378,7 +380,7 @@ const fullCount = filtered.length;
                   <div className="lg:w-[100px] lg:h-[100px] relative md:w-[70px] md:h-[70px] rounded-full bg-[#50B7FF] flex justify-center items-center ">
                      <div className="lg:w-[38px] lg:h-[38px] md:w-[26px] md:h-[26px] absolute lg:-right-1 lg:-top-2 
                     md:right-0 md:-top-1 rounded-full bg-[#ED1F22] border-[4px] border-[#FDFDFD] flex justify-center items-center ">
-                      <p className="font-bold lg:text-[18px] md:text-[12px] text-white ">1</p>
+                      {/* <p className="font-bold lg:text-[18px] md:text-[12px] text-white ">1</p> */}
                     </div>
                      <img src="/assets/lab.svg" className="lg:w-[40px] lg:h-[40px] md:w-[30px] md:h-[30px] "/>
                 </div>
@@ -392,7 +394,7 @@ const fullCount = filtered.length;
 
            <div className="w-[95%] h-[60px] bg-[#6F3CDB] left-1/2 -translate-x-1/2 px-8 absolute -bottom-15 rounded-b-[30px] flex justify-between items-center ">
              {latest?.dischargeTemplates.length > 0 && <p className="font-semibold lg:text-[20px] md:text-[16px] text-white ">Discharge Summery Ready For {patient.identityDetails?.salutation} {patient.identityDetails?.patientName || "-"}</p> }
-               <p className="font-semibold lg:text-[20px] md:text-[16px] text-white ">Billing Discharge at 25-07-2025 </p>
+             {latest?.billingDischargeDate &&   <p className="font-semibold lg:text-[20px] md:text-[16px] text-white ">Billing Discharge at {formatDate(latest?.billingDischargeDate)} </p> }
            </div>
 
         </Link>
