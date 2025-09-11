@@ -4,6 +4,8 @@ import axios from "axios";
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 import { ChevronLeft, Pencil, Trash2, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { fetchWithCache } from "../../../../offline/fetchWithCache";
+import { useOnline } from "../../../../offline/useOnline";
 
 
 const toTitleCase = (s) =>
@@ -133,8 +135,8 @@ const NotesData = ({ selectedMaster, masters, setSelectedMaster }) => {
 
   const user = JSON.parse(localStorage.getItem("auth"));
   const token = user?.token;
+  const online = useOnline()
 
-  console.log([apiField])
   const fetchNotes = async () => {
     if (!pid || !aid) return;
     try {

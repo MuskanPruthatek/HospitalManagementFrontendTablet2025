@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom";
 // import CustomDropdown from "../CustomDropdown/CustomDropdown";
 import CustomDropdown2 from "../CustomDropdown/CustomDropdown2";
 import { usePatient } from "../../context/PatientContext";
+import { fetchWithCache } from "../../offline/fetchWithCache";
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 
 const PatientDetails = () => {
@@ -16,18 +17,28 @@ const PatientDetails = () => {
   const [patientData, setPatientData] = useState(null);
   const [currentPatientId, setCurrentPatientId] = useState(null);
 
-  
+  const [pdfs, setPdfs] = useState([])
+
+  useEffect(() => {
+  const fetchPDFS = (forceOnline = false) =>
+  fetchWithCache({
+    collection: "pdfs",
+    url: `${VITE_APP_SERVER}/api/v1/document-pdf`,
+    setItems: setPdfs,
+    forceOnline,
+  });
+    fetchPDFS();
+  }, []);
 
   // 1) Fetch list of patients once
   useEffect(() => {
-    const fetchPatients = async () => {
-      try {
-        const res = await axios.get(`${VITE_APP_SERVER}/api/v1/patient`);
-        setPatients(res.data.data || []);
-      } catch (err) {
-        console.error("Error fetching patients", err);
-      }
-    };
+    const fetchPatients = (forceOnline = false) =>
+    fetchWithCache({
+      collection: "patients",
+      url: `${VITE_APP_SERVER}/api/v1/patient`,
+      setItems: setPatients,      
+      forceOnline,             
+    });
     fetchPatients();
   }, []);
 
@@ -41,13 +52,17 @@ const PatientDetails = () => {
     }
   }, [selectedPatient?.patientId, currentPatientId]); // eslint-disable-line
 
-  // 3) Fetch patient details when currentPatientId changes
-  useEffect(() => {
-    if (!currentPatientId) return;
-    axios
-      .get(`${VITE_APP_SERVER}/api/v1/patient/${currentPatientId}`)
-      .then((res) => setPatientData(res.data.data))
-      .catch((err) => console.error(err));
+    useEffect(() => {
+       if (!currentPatientId) return;
+    const fetchPatientsWithId = (forceOnline = false) =>
+    fetchWithCache({
+  collection: `patientData-${currentPatientId}`, // unique per patient
+  url: `${VITE_APP_SERVER}/api/v1/patient/${currentPatientId}`,
+  setItems: setPatientData,
+  forceOnline,
+});
+
+    fetchPatientsWithId();
   }, [currentPatientId]);
 
   // Build dropdown options as {label, value}
@@ -57,6 +72,7 @@ const PatientDetails = () => {
       value: p?._id,
     }));
   }, [patients]);
+
 
   return (
     <div className="w-full h-full bg-white font-inter ">
@@ -119,31 +135,23 @@ const PatientDetails = () => {
         </div>
       </div>
 
-      <div className="w-full px-5 bg-white md:portrait:h-[50vh] md:landscape:h-[5vh] lg:portrait:h-[55vh] lg:landscape:h-[45vh] overflow-y-scroll">
+      <div className="w-full px-5 bg-white md:portrait:h-[50vh] md:landscape:h-[5vh] lg:portrait:h-[55vh] lg:landscape:h-[45vh] overflow-y-scroll scrolll">
         <div className="w-full grid grid-cols-2 content-start gap-x-6 gap-y-4 ">
-          <div className="w-full h-[48px] bg-[#FFF7F2] flex items-center px-5 ">
-            <p className="text-black font-semibold text-[20px] ">
-              0.First floor Semi-special room{" "}
+        {pdfs.map((pdf, index)=>{
+          const urlQP = pdf.pdfUrl ? `?file=${encodeURIComponent(pdf.pdfUrl)}&name=${encodeURIComponent(pdf.pdfName)}` : "";
+          return (
+          <Link key={pdf._id || index}
+        to={`/main/patients/pdf${urlQP}`}
+        state={{
+          file: pdf.fileBlob || pdf.pdfUrl || null, // Blob/File or URL
+          name: pdf.pdfName || "Document",
+        }} className="w-full h-[48px] bg-[#FFF7F2] flex items-center px-5 ">
+            <p className="text-black font-semibold text-[16px] ">
+              {index+1}. {pdf.pdfName}
             </p>
-          </div>
-
-          <div className="w-full h-[48px] bg-[#F6EEFC] flex items-center px-5 ">
-            <p className="text-black font-semibold text-[20px] ">
-              0.First floor Semi-special room{" "}
-            </p>
-          </div>
-
-          <div className="w-full h-[48px] bg-[#EEFCFC] flex items-center px-5 ">
-            <p className="text-black font-semibold text-[20px] ">
-              0.First floor Semi-special room{" "}
-            </p>
-          </div>
-
-          <div className="w-full h-[48px] bg-[#FFF7F2] flex items-center px-5 ">
-            <p className="text-black font-semibold text-[20px] ">
-              0.First floor Semi-special room{" "}
-            </p>
-          </div>
+          </Link>
+          )
+        })}       
         </div>
 
         <div className="w-full flex gap-6 mt-5">

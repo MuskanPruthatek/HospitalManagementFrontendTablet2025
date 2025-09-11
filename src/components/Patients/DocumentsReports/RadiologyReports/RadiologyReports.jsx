@@ -12,6 +12,8 @@ import {
   Folder,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { fetchWithCache } from "../../../../offline/fetchWithCache";
+import { useOnline } from "../../../../offline/useOnline";
 
 /* ----------------------------- Rename Modal ----------------------------- */
 const RenameModal = ({
@@ -846,7 +848,7 @@ const RadiologyReports = () => {
   // context menu
   const [menu, setMenu] = useState({ open: false, x: 0, y: 0, clipId: null });
 
-
+const online = useOnline();
   // long-press handling
   const longPressMs = 550;
   const timers = useRef({});
@@ -889,41 +891,49 @@ const RadiologyReports = () => {
   }, [alert]);
 
   // fetch patient
-  useEffect(() => {
-    if (!selectedPatient?.patientId) return;
-    axios
-      .get(`${VITE_APP_SERVER}/api/v1/patient/${selectedPatient.patientId}`)
-      .then((res) => setPatientData(res.data.data))
-      .catch((err) => console.error(err));
-  }, [selectedPatient?.patientId]);
-
-  const patientId = patientData?._id || patientData?.patientId;
-  const admissionId = selectedPatient?.admissionId;
-
-  // fetch reports
-  useEffect(() => {
+        useEffect(() => {
+           if (!selectedPatient?.patientId) return;
+        const fetchPatientsWithId = (forceOnline = false) =>
+        fetchWithCache({
+      collection: `patientData-${selectedPatient.patientId}`, // unique per patient
+      url: `${VITE_APP_SERVER}/api/v1/patient/${selectedPatient.patientId}`,
+      setItems: setPatientData,
+      forceOnline,
+    });
+    
+        fetchPatientsWithId();
+      }, [selectedPatient?.patientId]);
+  
+    const patientId = patientData?._id || patientData?.patientId;
+    const admissionId = selectedPatient?.admissionId;
+  
+    // fetch reports
+    useEffect(() => {
+      if (!patientId || !admissionId) return;
+      fetchRecordings(patientId, admissionId);
+    }, [patientId, admissionId]);
+  
+  
+  const fetchRecordings = async (patientId, admissionId, forceOnline = false) => {
     if (!patientId || !admissionId) return;
-    fetchRecordings(patientId, admissionId);
-  }, [patientId, admissionId]);
-
-  const fetchRecordings = async (patientId, admissionId) => {
+  
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data } = await axios.get(
-        `${VITE_APP_SERVER}/api/v1/files-recordings/${patientId}/${admissionId}/radiologyReports`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setRadiologyReports(data.data.radiologyReports || []);
+      await fetchWithCache({
+        collection: `radiologyReports-${patientId}-${admissionId}`,
+        url: `${VITE_APP_SERVER}/api/v1/files-recordings/${patientId}/${admissionId}/radiologyReports`,
+        setItems: (items) => setRadiologyReports(items.radiologyReports || []),
+        forceOnline,
+      });
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching recordings", err);
     } finally {
       setLoading(false);
     }
   };
-
-  const fetchReports = () => {
-    // small helper so older calls continue to work
-    if (patientId && admissionId) fetchRecordings(patientId, admissionId);
+  
+  const fetchReports = (forceOnline = false) => {
+    if (patientId && admissionId) fetchRecordings(patientId, admissionId, forceOnline);
   };
 
   /* ------------------------------ Upload PDF ------------------------------ */

@@ -195,7 +195,7 @@ const toBedOptions = useMemo(() => {
         <div className="w-[90%] flex flex-col gap-y-2 mx-auto ">
           <p className="label ">New Bed Number</p>
           <div className="w-[100%]">
-           <CustomDropdown
+           <CustomDropdown label="Select New Bed"
           options={toBedOptions}
           selected={toBed}
           onChange={setToBed}

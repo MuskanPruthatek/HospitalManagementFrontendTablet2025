@@ -37,7 +37,8 @@ import { senders } from "./offline/senders";
 import RegisterPatient from "./components/RegisterPatient/RegisterPatient";
 import EditPatient from "./components/EditPatient/EditPatient";
 import LabReports from "./components/Patients/DocumentsReports/Labreports/LabReports";
-
+import PDFWriter from "./components/Patients/DocumentsReports/PDFWriter/PDFWriter"
+import PatientPages from "./components/Patients/DocumentsReports/PatientPages/PatientPages"
 
   function AppWithInterceptors() {
   const navigate = useNavigate();
@@ -86,6 +87,8 @@ import LabReports from "./components/Patients/DocumentsReports/Labreports/LabRep
          <Route path="/main" element={<Layout />}>
             <Route path="patients" element={<Patients />} />
             <Route path="patients/patient-details" element={<PatientDetails  />}/>
+            <Route path="patients/pdf" element={<PDFWriter />} />
+            <Route path="patients/patient-pages" element={<PatientPages />} />
             {/* <Route path="patients/edit-documents" element={<PatientEditDocuments selectedPatient={selectedPatient} setSelectedPatient={setSelectedPatient} />} /> */}
             <Route path="patients/other-documents" element={<OtherDocuments  />} />
             <Route path="patients/radiology-reports" element={<RadiologyReports  />} />

@@ -42,10 +42,12 @@ const DocumentDetails = () => {
   const { Toolbar } = toolbar;
 
   // pdf.js worker (fixed version string; no TS casts)
-  const workerUrl = useMemo(
-    () => 'https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.worker.min.js',
-    []
-  );
+  // const workerUrl = useMemo(
+  //   () => 'https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.worker.min.js',
+  //   []
+  // );
+
+  const workerUrl = '/pdf.worker.min.mjs';
 
   const onShare = async () => {
     try {
@@ -81,7 +83,7 @@ const DocumentDetails = () => {
 
         {/* Print / Share / Download wired to plugins via render-props */}
         <div className="flex gap-x-3 md:gap-x-5">
-          <DownloadButton>
+          {/* <DownloadButton>
             {(props) => (
               <button
                 className="w-[97px] h-[70px] bg-[#36D7A0] rounded-[10px] flex justify-center items-center"
@@ -91,9 +93,17 @@ const DocumentDetails = () => {
                 <Download color="white" size={30} />
               </button>
             )}
-          </DownloadButton>
+          </DownloadButton> */}
 
           <button
+            className="w-[97px] h-[70px] bg-[#36D7A0] rounded-[10px] flex justify-center items-center"
+            onClick={onShare}
+            title="Share" >
+            {/* <Share2 color="white" size={30} /> */}
+            <img src="/assets/whatsapp-line.svg"/>
+          </button>
+
+          {/* <button
             className="w-[97px] h-[70px] bg-[#FB8C5C] rounded-[10px] flex justify-center items-center"
             onClick={onShare}
             title="Share"
@@ -111,14 +121,14 @@ const DocumentDetails = () => {
                 <Printer color="white" size={30} />
               </button>
             )}
-          </Print>
+          </Print> */}
         </div>
       </div>
 
       {/* Viewer area */}
       <div className="w-full relative portrait:h-[90%] landscape:h-[85%] overflow-hidden">
         {/* Left thumbnails column */}
-        <div className="hidden md:block w-[280px] h-full overflow-y-auto float-left px-4 py-5">
+        <div className="absolute z-50 top-20 w-[180px] h-full overflow-y-auto float-left px-4 py-5">
           <Thumbnails />
         </div>
 
@@ -166,7 +176,7 @@ const DocumentDetails = () => {
         </div>
 
         {/* Main viewer */}
-        <div className="md:ml-[280px] h-full overflow-y-auto">
+        <div className=" h-full overflow-y-auto">
           {/* Optional: full toolbar (search, zoom, rotate, etc.) */}
           <div className="sticky top-0 z-10 bg-white border-b">
             <Toolbar />

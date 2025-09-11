@@ -7,262 +7,34 @@ import TransferHistory from "../EditPatient/TransferHistory"
 import ChangeConsultantForm from "../EditPatient/ChangeConsultantForm"
 import ConsultantHistory from "../EditPatient/ConsultantHistory"
 import Camera from "../RegisterPatient/Camera"
+import { useAdmissionFlags } from "./Helpers/useAdmissionFlags";
+import usePatientMaster from "./Helpers/usePatientMaster";
+import { fetchWithCache } from "../../offline/fetchWithCache";
+import { useOnline } from "../../offline/useOnline";
 
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
-
-const FIELD_BINDINGS = {
-  // Location & bed
-  bedDepartment: "Bed Department",
-
-  // Vitals / basics
-  weight: "Weight",
-  height: "Patient Height",
-  bloodGroup: "Blood Group",
-  patientType: "Patient Type (New/Old)",
-
-  // Administrative / status
-  applicableClass: "Applicable Class",
-  emergencyNo: "Emergency No",
-
-  // Doctors & referrals
-
-  referredByDoctorId: "Referred by Doctor",
-  referralFromDoctor: "Referral from Doctor",
-  referredByDoctorSelectBox: "Referred by Doctor Select Box",
-  otherConsultant: "Other Consultants",
-
-  // MLC
-  mlcType: "Patient MLC Type",
-  mlcNo: "MLC No",
-
-  // Neonatal / maternity specifics
-  birthAsphyxiaAndNICUShifted: "Birth asphyxia & NICU shifted",
-  termOfBaby: "Term of baby",
-  modeOfDelivery: "Mode of Delivery",
-  babyIllness: "Baby Illness",
-  husbandName: "Husband Name",
-  foodPreference: "Food Preference",
-  birthTime: "Birth Time",
-  motherAge: "Mother Age",
-
-  // Procedures / labs / reports
-  operations: "Operations",
-  laboratorySelectionId: "Laboratory Selection",
-  covidReport: "Covid Report",
-  vaccinationDetails: "Vaccination Details",
-
-  // Discharge checklists
-  clinicalDischarge: "Clinical Discharge",
-  billingDischarge: "Billing Discharge",
-  pharmacyDischarge: "Pharmacy Discharge",
-  labDischarge: "Lab Discharge",
-
-  // Misc feature toggles
-  maintainMRDFileStatus: "Maintain MRD File Status",
-  addDietModule: "Add Diet Module",
-  useClinicalScoreCalculator: "Use Clinical Score Calculator",
-  CPT: "CPT",
-
-  // Relative / attendant details (group toggle)
-  relativeDetails: "Relative Details (Attendant)", // controls responsiblePerson, relationship, relativeContactNo
-
-  // Employer / finance
-  employerCompanyName: "Employer Company Name",
-  TIDNumber: "TID Number",
-  paymentMode: "Payment Mode Options",
-  paymentRemark: "Payment Remark",
-  corporation: "Patient from Corporation",
-
-  // Notes / diagnoses
-  complaints: "Complaints",
-  pastFamilyHistory: "Past/Family History",
-  provisionalDiagnosis: "Provisional Diagnosis",
-  finalDiagnosis: "Final Diagnosis",
-  remarks: "Remark",
-
-  // Media
-  patientPhoto: "Patient Photo",
-};
-
-function useAdmissionFlags(fields = []) {
-  const lookup = useMemo(() => {
-    const m = new Map();
-    for (const f of fields) {
-      m.set((f.fieldName || "").trim().toLowerCase(), !!f.status);
-    }
-    return m;
-  }, [fields]);
-
-  const showByFieldName = (name, fallback = true) => {
-    const key = (name || "").trim().toLowerCase();
-    return lookup.has(key) ? lookup.get(key) : fallback; // default to visible if not configured
-  };
-
-  const show = (uiKey, fallback = true) => {
-    const bound = FIELD_BINDINGS[uiKey] ?? uiKey;
-    if (Array.isArray(bound)) {
-      // visible if ANY bound field is enabled; switch to .every if you want ALL required
-      return bound.some((n) => showByFieldName(n, fallback));
-    }
-    return showByFieldName(bound, fallback);
-  };
-
-  return { show };
-}
 
 const AdmissionDetailsForm = ({ value, onChange, patientId, admissionId }) => {
   const [addNewReferred, setAddNewReferred] = useState(false);
   const [transferHistory, setTransferHistory] = useState(false);
   const [consultantHistory, setConsultantHistory] = useState(false);
-  const [floors, setFloors] = useState([]);
-  const [beds, setBeds] = useState([]);
-  const [floorMap, setFloorMap] = useState({});
+
   const [selectedFloor, setSelectedFloor] = useState("");
-  const [bedMap, setBedMap] = useState({});
-
-  /* ───── dropdown maps (label ↔ id) ───── */
-  const [reasonOpts, setReasonOpts] = useState([]);   // ["Medical", …]
-  const [reasonL2I, setReasonL2I] = useState({});   // label → id
-  const [reasonI2L, setReasonI2L] = useState({});   // id    → label
-
-  const [doctorOpts, setDoctorOpts] = useState([]);
-  const [doctorL2I, setDoctorL2I] = useState({});
-  const [doctorI2L, setDoctorI2L] = useState({});
-
-  const [refOpts, setRefOpts] = useState([]);
-  const [refL2I, setRefL2I] = useState({});
-  const [refI2L, setRefI2L] = useState({});
-
-  const [labOpts, setLabOpts] = useState([]);
-  const [labL2I, setLabL2I] = useState({});
-  const [labI2L, setLabI2L] = useState({});
-
-  useEffect(() => {
-    fetchReferredDoctors();
-    fetchAdmissionReasons();
-    fetchDoctors();
-    fetchLabs()
-  }, []);
-
-  /*  ░░ floors ░░ */
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await axios.get(
-          `${VITE_APP_SERVER}/api/v1/hospital-master/floor-master`
-        );
-        //   [{ _id, floorName }]
-        setFloors(data.data.map((f) => f.floorName));
-        setFloorMap(
-          Object.fromEntries(data.data.map((f) => [f.floorName, f._id]))
-        );
-      } catch (err) {
-        /* … */
-      }
-    })();
-  }, []);
-
-  /*  ░░ beds ░░ */
-  /*  ░░ beds ░░ */
-  useEffect(() => {
-    (async () => {
-      try {
-        // 1) fetch only vacant
-        const { data } = await axios.get(
-          `${VITE_APP_SERVER}/api/v1/hospital-master/bed-master/vacant`
-        );
-        let list = data.data; // array of bed objects
-
-        // 2) ensure current occupied bed is present so it can display/select
-        const curBedId = asId(value.bedId);
-        const curBedName = asName(value.bedId, "bedName");
-        const curFloorId = asId(value.floorId);
-
-        const hasCurrent = curBedId && list.some(b => b._id === curBedId);
-        if (!hasCurrent && curBedId) {
-          // If you have a single-bed API, try it; else synthesize a minimal entry
-          try {
-            const one = await axios.get(
-              `${VITE_APP_SERVER}/api/v1/hospital-master/bed-master/${curBedId}`
-            );
-            if (one?.data?.data) {
-              list = [...list, one.data.data];
-            } else {
-              list = [...list, { _id: curBedId, bedName: curBedName || "Current Bed", floorId: curFloorId }];
-            }
-          } catch {
-            list = [...list, { _id: curBedId, bedName: curBedName || "Current Bed", floorId: curFloorId }];
-          }
-        }
-
-        // 3) save + rebuild map
-        setBeds(list);
-        setBedMap(Object.fromEntries(list.map((b) => [b.bedName, b._id])));
-      } catch (err) {
-        console.error(err);
-      }
-    })();
-    // re-run if current selection changes so we keep the “current” bed in list
-  }, [value.bedId, value.floorId]);
-
-
-  const fetchAdmissionReasons = async () => {
-    const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/admission-reason`);
-    const labels = data.data.map(r => r.admissionReason);
-    const l2i = Object.fromEntries(data.data.map(r => [r.admissionReason, r._id]));
-    const i2l = Object.fromEntries(data.data.map(r => [r._id, r.admissionReason]));
-    setReasonOpts(labels); setReasonL2I(l2i); setReasonI2L(i2l);
-  };
-
-  const fetchDoctors = async () => {
-    const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/doctor-master`);
-    const labels = data.data.map(d => d.doctorName);
-    const l2i = Object.fromEntries(data.data.map(d => [d.doctorName, d._id]));
-    const i2l = Object.fromEntries(data.data.map(d => [d._id, d.doctorName]));
-    setDoctorOpts(labels); setDoctorL2I(l2i); setDoctorI2L(i2l);
-  };
-
-  const fetchReferredDoctors = async () => {
-    const { data } = await axios.get(
-      `${VITE_APP_SERVER}/api/v1/doctor-master/referred-doctor/all`
-    );
-    const labels = data.data.map(d => d.doctorName);
-    const l2i = Object.fromEntries(data.data.map(d => [d.doctorName, d._id]));
-    const i2l = Object.fromEntries(data.data.map(d => [d._id, d.doctorName]));
-    setRefOpts(labels); setRefL2I(l2i); setRefI2L(i2l);
-  };
-
-  const fetchLabs = async () => {
-    const { data } = await axios.get(
-      `${VITE_APP_SERVER}/api/v1/hospital-master/lab-master`
-    );
-    const labels = data.data.map((l) => l.labName);
-    const l2i = Object.fromEntries(data.data.map((l) => [l.labName, l._id]));
-    const i2l = Object.fromEntries(data.data.map((l) => [l._id, l.labName]));
-    setLabOpts(labels);
-    setLabL2I(l2i);
-    setLabI2L(i2l);
-  };
+  const online = useOnline()
 
   const asId = (x) => (x && typeof x === "object" ? x._id : x);
   const asName = (x, key) => (x && typeof x === "object" ? x[key] : "");
 
-
-  const bedOptions = useMemo(() => {
-    if (!selectedFloor) {
-      return beds.map(b => b.bedName);
-    }
-    const selFloorId = floorMap[selectedFloor];
-    return beds
-      .filter(b => asId(b.floorId) === selFloorId)
-      .map(b => b.bedName);
-  }, [beds, selectedFloor, floorMap]);
-
-
-  useEffect(() => {
-    console.log("floors:", floors, floorMap);
-    console.log("beds:", beds.map(b => b.floorDetails));
-  }, [floors, beds]);
+  const {
+  floors, beds, floorMap, bedMap,
+  reasonOpts, reasonL2I, reasonI2L,
+  doctorOpts, doctorL2I, doctorI2L,
+  refOpts, refL2I, refI2L,
+  labOpts, labL2I, labI2L,
+  bedOptions, floorOptions,
+  fetchBeds, fetchFloors, fetchDoctors, fetchReferredDoctors, fetchLabs, fetchAdmissionReasons,
+  loading,
+} = usePatientMaster(selectedFloor);
 
   useEffect(() => {
     // once floors & floorMap are loaded, pick the right label
@@ -300,20 +72,20 @@ const AdmissionDetailsForm = ({ value, onChange, patientId, admissionId }) => {
     });
   };
 
+ useEffect(() => {
+      fetchAdmissionFields()
+    }, []);
+
   const [admissionFields, setAdmissionFields] = useState([]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        // replace endpoint if different; using your sample response shape
-        const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/document-master/admissionform-master`);
-        setAdmissionFields(data.data || []);
-      } catch (e) {
-        console.error("Failed to fetch admission fields", e);
-        setAdmissionFields([]); // fall back to default-true behavior
-      }
-    })();
-  }, []);
+   const fetchAdmissionFields = (forceOnline = false) =>
+      fetchWithCache({
+        collection: "admissionFields",
+        url: `${VITE_APP_SERVER}/api/v1/document-master/admissionform-master`,
+        setItems: setAdmissionFields,
+        forceOnline,           
+      });
+  
   const { show } = useAdmissionFlags(admissionFields);
 
   // helper to check if a field has any data in value
@@ -382,15 +154,17 @@ const shouldShow = (uiKey) => {
 
           <div className="flex w-full gap-x-3 items-center justify-end ">
             <p className="label ">Floor Number:</p>
-            <div className="w-[60%] ">
-              <CustomDropdown label="Select Floor"
-                options={floors}
-                selected={floors.find(l => floorMap[l] === value.floorId) || ""}
-                onChange={label => {
-                  onChange({ floorId: floorMap[label], bedId: "" });
-                  setSelectedFloor(label);
-                }}
-
+            <div className="w-[60%] ">             
+               <CustomDropdown label="Select Floor"
+                options={floorOptions}
+                
+                selected={
+    Object.keys(floorMap).find(k => floorMap[k] === value.floorId) || ""
+  }
+  onChange={(label) => {
+    onChange({ floorId: floorMap[label], bedId: "" });
+    setSelectedFloor(label);        
+  }}
               />
             </div>
           </div>
@@ -403,13 +177,9 @@ const shouldShow = (uiKey) => {
                 <CustomDropdown label="Select Bed"
                   options={bedOptions}
                   selected={
-                    // first, resolve label by id→label via bedMap
-                    Object.keys(bedMap).find(l => bedMap[l] === asId(value.bedId)) ||
-                    // fallback to the embedded name from API object
-                    asName(value.bedId, "bedName") ||
-                    ""
+                    bedOptions.find((l) => bedMap[l] === value.bedId) || ""
                   }
-                  onChange={label => onChange({ bedId: bedMap[label] })}
+                  onChange={(label) => onChange({ bedId: bedMap[label] })}
                 />
 
               </div>

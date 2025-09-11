@@ -12,6 +12,9 @@ import {
   Folder,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { fetchWithCache } from "../../../../offline/fetchWithCache";
+import { useOnline } from "../../../../offline/useOnline"
+import { queueRequest } from "../../../../offline/helpers";
 
 /* ----------------------------- Rename Modal ----------------------------- */
 const RenameModal = ({
@@ -828,7 +831,6 @@ const OtherDocuments = () => {
 
   const [patientData, setPatientData] = useState(null);
 
-
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const user = JSON.parse(localStorage.getItem("auth"));
   const token = user?.token;
@@ -842,6 +844,7 @@ const OtherDocuments = () => {
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [files, setFiles] = useState([]);
+  const online = useOnline();
 
   // context menu
   const [menu, setMenu] = useState({ open: false, x: 0, y: 0, clipId: null });
@@ -869,6 +872,7 @@ const OtherDocuments = () => {
       delete timers.current[id];
     }
   };
+
   const onPressEnd = (e, clip) => {
     // tap = open context menu already? if so, ignore
     if (menu.open && menu.clipId === clip._id) return;
@@ -888,14 +892,18 @@ const OtherDocuments = () => {
     return () => clearTimeout(t);
   }, [alert]);
 
-  // fetch patient
-  useEffect(() => {
-    if (!selectedPatient?.patientId) return;
-    axios
-      .get(`${VITE_APP_SERVER}/api/v1/patient/${selectedPatient.patientId}`)
-      .then((res) => setPatientData(res.data.data))
-      .catch((err) => console.error(err));
-  }, [selectedPatient?.patientId]);
+      useEffect(() => {
+         if (!selectedPatient?.patientId) return;
+      const fetchPatientsWithId = (forceOnline = false) =>
+      fetchWithCache({
+    collection: `patientData-${selectedPatient.patientId}`, // unique per patient
+    url: `${VITE_APP_SERVER}/api/v1/patient/${selectedPatient.patientId}`,
+    setItems: setPatientData,
+    forceOnline,
+  });
+  
+      fetchPatientsWithId();
+    }, [selectedPatient?.patientId]);
 
   const patientId = patientData?._id || patientData?.patientId;
   const admissionId = selectedPatient?.admissionId;
@@ -906,25 +914,28 @@ const OtherDocuments = () => {
     fetchRecordings(patientId, admissionId);
   }, [patientId, admissionId]);
 
-  const fetchRecordings = async (patientId, admissionId) => {
-    try {
-      setLoading(true);
-      const { data } = await axios.get(
-        `${VITE_APP_SERVER}/api/v1/files-recordings/${patientId}/${admissionId}/docs`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setDocs(data.data.docs || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const fetchReports = () => {
-    // small helper so older calls continue to work
-    if (patientId && admissionId) fetchRecordings(patientId, admissionId);
-  };
+const fetchRecordings = async (patientId, admissionId, forceOnline = false) => {
+  if (!patientId || !admissionId) return;
+
+  setLoading(true);
+  try {
+    await fetchWithCache({
+      collection: `otherDocs-${patientId}-${admissionId}`,
+      url: `${VITE_APP_SERVER}/api/v1/files-recordings/${patientId}/${admissionId}/docs`,
+      setItems: (items) => setDocs(items.docs || []),
+      forceOnline,
+    });
+  } catch (err) {
+    console.error("Error fetching recordings", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const fetchReports = (forceOnline = false) => {
+  if (patientId && admissionId) fetchRecordings(patientId, admissionId, forceOnline);
+};
 
   /* ------------------------------ Upload PDF ------------------------------ */
   const handleUpload = async () => {
@@ -1013,8 +1024,6 @@ const OtherDocuments = () => {
   setUpdateProgress(0);
   setEditOpen(true);
 };
-
-
 
   const submitEdit = async () => {
   if (!editingRecord) return;
@@ -1365,8 +1374,7 @@ const viewItems = isRoot
   };
 
   fetchFolders();
-}, [patientId, admissionId]);
-
+ }, [patientId, admissionId]);
 
   const openFolder = (folder) => {
   setActiveFolder(folder?.data || folder); // accept either the mapped or raw folder

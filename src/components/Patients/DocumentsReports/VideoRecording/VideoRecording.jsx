@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+import { fetchWithCache } from "../../../../offline/fetchWithCache";
+import { useOnline } from "../../../../offline/useOnline";
 /* ---------- Utils ---------- */
 const formatTime = (s) => {
   const mm = String(Math.floor(s / 60)).padStart(2, "0");
@@ -765,6 +767,7 @@ const VideoRecording = () => {
   const user = JSON.parse(localStorage.getItem("auth"));
   const token = user?.token;
 
+  const online = useOnline()
   const todayStr = new Date().toLocaleDateString();
   // const menuRecord = videoRecordings?.find(r => (r._id || r.id) === menu.clipId);
 
@@ -773,28 +776,36 @@ const VideoRecording = () => {
     fetchRecordings(pid, aid);
   }, [pid, aid]);
 
-  const fetchRecordings = async (patientId, admissionId) => {
-    try {
-      setLoading(true);
-      const { data } = await axios.get(
-        `${VITE_APP_SERVER}/api/v1/audio-video-rec/${patientId}/${admissionId}/videoRecordings`
-      );
-      setVideoRecordings(data.data.videoRecordings || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchRecordings = async (patientId, admissionId, forceOnline = false) => {
+    if (!patientId || !admissionId) return;
 
+    setLoading(true);
+    try {
+        await fetchWithCache({
+            collection: `vidRec-${patientId}-${admissionId}`,
+            url: `${VITE_APP_SERVER}/api/v1/audio-video-rec/${patientId}/${admissionId}/videoRecordings`,
+            setItems: (items) => setVideoRecordings(items.videoRecordings || []),
+            forceOnline,
+        });
+    } catch (err) {
+        console.error("Error fetching recordings", err);
+    } finally {
+        setLoading(false);
+    }
+};
 
   useEffect(() => {
     if (!selectedPatient?.patientId) return;
-    axios
-      .get(`${VITE_APP_SERVER}/api/v1/patient/${selectedPatient?.patientId}`)
-      .then((res) => setPatientData(res.data.data))
-      .catch((err) => console.error(err));
-  }, [selectedPatient?.patientId]);
+    const fetchPatientsWithId = (forceOnline = false) =>
+        fetchWithCache({
+            collection: `patientData-${selectedPatient.patientId}`, // unique per patient
+            url: `${VITE_APP_SERVER}/api/v1/patient/${selectedPatient.patientId}`,
+            setItems: setPatientData,
+            forceOnline,
+        });
+
+    fetchPatientsWithId();
+}, [selectedPatient?.patientId]);
 
   const handleSaveClip = async ({ file, url, duration }) => {
     if (!pid || !aid) return;
@@ -885,7 +896,6 @@ const VideoRecording = () => {
   setUpdateProgress(0);
   setEditOpen(true);
 };
-
 
 const submitEdit = async () => {
   if (!editingRecord) return;
@@ -1004,8 +1014,6 @@ const submitEdit = async () => {
     setUpdateProgress(0);
   }
 };
-
-
   /* ---- Delete ---- */
  const handleDelete = async (record) => {
   if (!record) return;

@@ -369,10 +369,16 @@ const fullCount = filtered.length;
                    <img src="/assets/editPatient.svg" className="lg:w-[40px] lg:h-[40px] md:w-[30px] md:h-[30px] "/>
                 </div>
 
-                  <div className="lg:w-[100px] lg:h-[100px] relative md:w-[70px] md:h-[70px] rounded-full bg-[#FB8C5C] flex justify-center items-center ">
+                  <div  onClick={(e) => {
+        e.stopPropagation(); // prevent parent Link click
+        e.preventDefault();  // stop redirect to details
+        setSelectedPatient({ patientId: patient._id, admissionId: latest?._id ?? null });
+        // redirect to edit page
+        window.location.href = `/main/patients/patient-pages`;
+      }} className="lg:w-[100px] lg:h-[100px] relative md:w-[70px] md:h-[70px] rounded-full bg-[#FB8C5C] flex justify-center items-center ">
                     <div className="lg:w-[38px] lg:h-[38px] md:w-[26px] md:h-[26px] absolute lg:-right-1 lg:-top-2 
                     md:right-0 md:-top-1 rounded-full bg-[#ED1F22] border-[4px] border-[#FDFDFD] flex justify-center items-center ">
-                      {/* <p className="font-bold lg:text-[18px] md:text-[12px] text-white ">1</p> */}
+                      <p className="font-bold lg:text-[18px] md:text-[12px] text-white ">{latest?.documentPdf?.length}</p>
                     </div>
                     <img src="/assets/folder.svg" className="lg:w-[40px] lg:h-[40px] md:w-[30px] md:h-[30px] "/>
                 </div>

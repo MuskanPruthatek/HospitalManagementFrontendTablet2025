@@ -4,6 +4,8 @@ import axios from "axios";
 const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 import { ChevronLeft, Mic, SlidersHorizontal, X, Square, Play, SkipBack, SkipForward, Pause, Pencil, Trash2, Loader2, ChevronRight, FastForward, Folder } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { fetchWithCache } from "../../../../offline/fetchWithCache";
+import { useOnline } from "../../../../offline/useOnline";
 
 /* ---------- Utils ---------- */
 const formatTime = (s) => {
@@ -884,6 +886,7 @@ const AudioRecording = () => {
   const [audioRecordings, setAudioRecordings] = useState([]);
   const [loading, setLoading] = useState(false)
 
+  const online = useOnline()
   const pid = selectedPatient?.patientId;
   const aid = selectedPatient?.admissionId;
 
@@ -927,30 +930,39 @@ const AudioRecording = () => {
     fetchRecordings(pid, aid);
   }, [pid, aid]);
 
-  const fetchRecordings = async (patientId, admissionId) => {
+  const fetchRecordings = async (patientId, admissionId, forceOnline = false) => {
+    if (!patientId || !admissionId) return;
+
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data } = await axios.get(
-        `${VITE_APP_SERVER}/api/v1/audio-video-rec/${patientId}/${admissionId}/audioRecordings`
-      );
-      setAudioRecordings(data.data.audioRecordings);
+        await fetchWithCache({
+            collection: `audioRecordings-${patientId}-${admissionId}`,
+            url:  `${VITE_APP_SERVER}/api/v1/audio-video-rec/${patientId}/${admissionId}/audioRecordings`,
+            setItems: (items) => setAudioRecordings(items.audioRecordings || []),
+            forceOnline,
+        });
     } catch (err) {
-      console.error(err);
+        console.error("Error fetching recordings", err);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   const longPressMs = 550;
   const timers = useRef({});
 
   useEffect(() => {
     if (!selectedPatient?.patientId) return;
-    axios
-      .get(`${VITE_APP_SERVER}/api/v1/patient/${selectedPatient?.patientId}`)
-      .then((res) => setPatientData(res.data.data))
-      .catch((err) => console.error(err));
-  }, [selectedPatient?.patientId]);
+    const fetchPatientsWithId = (forceOnline = false) =>
+        fetchWithCache({
+            collection: `patientData-${selectedPatient.patientId}`, // unique per patient
+            url: `${VITE_APP_SERVER}/api/v1/patient/${selectedPatient.patientId}`,
+            setItems: setPatientData,
+            forceOnline,
+        });
+
+    fetchPatientsWithId();
+}, [selectedPatient?.patientId]);
 
   const handleSaveClip = async ({ file, url, duration }) => {
     const pid = selectedPatient?.patientId;
@@ -1182,8 +1194,6 @@ const submitEdit = async () => {
     setUpdateProgress(0);
   }
 };
-
-
   /* ---- Delete ---- */
  const handleDelete = async (record) => {
   if (!record) return;
@@ -1248,11 +1258,9 @@ const submitEdit = async () => {
   }
 };
 
-
 const [renameOpen, setRenameOpen] = useState(false);
 const [renameRecord, setRenameRecord] = useState(null);
 const [renaming, setRenaming] = useState(false);
-
 
 // A file shown while inside a folder list uses `fileId` in map
 const isFolderFile = (rec, activeFolder) => {
@@ -1746,5 +1754,3 @@ const hasItems = isRoot
 };
 
 export default AudioRecording;
-
-
