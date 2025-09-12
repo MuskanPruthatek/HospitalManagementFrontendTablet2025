@@ -77,14 +77,14 @@ const ResetPassword = () => {
               />
               {showNewPassword ? (
                 <EyeOff
-                  className="absolute top-3 right-5 cursor-pointer"
+                  className="absolute top-6 right-5 cursor-pointer"
                   color="#A1A3B2"
                   onClick={() => setShowNewPassword(false)}
                   aria-label="Hide password"
                 />
               ) : (
                 <Eye
-                  className="absolute top-3 right-5 cursor-pointer"
+                  className="absolute top-6 right-5 cursor-pointer"
                   color="#A1A3B2"
                   onClick={() => setShowNewPassword(true)}
                   aria-label="Show password"

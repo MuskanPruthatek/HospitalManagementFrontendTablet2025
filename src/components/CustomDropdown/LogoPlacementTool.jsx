@@ -158,7 +158,7 @@ export default function LogoPlacementTool({
         const blob = new Blob([stamped], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url; a.download = "document-with-logo.pdf";
+        a.href = url; a.download = "AMBULANCE BOOKING FORM (1).pdf";
         document.body.appendChild(a);
         a.click();
         a.remove();

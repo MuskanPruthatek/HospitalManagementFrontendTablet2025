@@ -14,7 +14,6 @@ const PatientPages = () => {
   const [patientData, setPatientData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [docs, setDocs] = useState([]);
-  // 🔧 prevent crash from undefined `alert`
   const [alert, setAlert] = useState({ type: "", message: "" });
 
   useEffect(() => {

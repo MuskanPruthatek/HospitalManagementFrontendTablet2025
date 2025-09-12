@@ -178,14 +178,14 @@ const Login = () => {
             />
             {showLoginPassword ? (
               <EyeOff
-                className='absolute top-3 right-5 cursor-pointer'
+                className='absolute top-6 right-5 cursor-pointer'
                 color='#A1A3B2'
                 onClick={() => setShowLoginPassword(false)}
                 aria-label="Hide password"
               />
             ) : (
               <Eye
-                className='absolute top-3 right-5 cursor-pointer'
+                className='absolute top-6 right-5 cursor-pointer'
                 color='#A1A3B2'
                 onClick={() => setShowLoginPassword(true)}
                 aria-label="Show password"

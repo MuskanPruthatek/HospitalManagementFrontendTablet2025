@@ -39,6 +39,9 @@ import EditPatient from "./components/EditPatient/EditPatient";
 import LabReports from "./components/Patients/DocumentsReports/Labreports/LabReports";
 import PDFWriter from "./components/Patients/DocumentsReports/PDFWriter/PDFWriter"
 import PatientPages from "./components/Patients/DocumentsReports/PatientPages/PatientPages"
+import LogoPlacementTool from "./components/CustomDropdown/LogoPlacementTool";
+import PdfColor from "./components/Patients/DocumentsReports/PDFWriter/PdfColor"
+import MRDChecklist from "./components/Patients/MRDChecklist";
 
   function AppWithInterceptors() {
   const navigate = useNavigate();
@@ -82,13 +85,16 @@ import PatientPages from "./components/Patients/DocumentsReports/PatientPages/Pa
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<SplashScreen />} />
         <Route path="/login" element={<Login />} />
+         <Route path="/logo" element={<LogoPlacementTool />} />
         <Route path="/reset-password" element={<ResetPassword />} />
          <Route element={<ProtectedRoute />}>
          <Route path="/main" element={<Layout />}>
             <Route path="patients" element={<Patients />} />
             <Route path="patients/patient-details" element={<PatientDetails  />}/>
             <Route path="patients/pdf" element={<PDFWriter />} />
+            <Route path="patients/pdf-color" element={<PdfColor />} />
             <Route path="patients/patient-pages" element={<PatientPages />} />
+            <Route path="patients/mrd-checklist" element={<MRDChecklist />} />
             {/* <Route path="patients/edit-documents" element={<PatientEditDocuments selectedPatient={selectedPatient} setSelectedPatient={setSelectedPatient} />} /> */}
             <Route path="patients/other-documents" element={<OtherDocuments  />} />
             <Route path="patients/radiology-reports" element={<RadiologyReports  />} />

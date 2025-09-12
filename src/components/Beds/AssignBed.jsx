@@ -11,6 +11,32 @@ import { drainOutbox, isOnline, queueRequest } from "../../offline/helpers";
 import { v4 as uuid } from "uuid";
 import { senders } from "../../offline/senders";
 
+// Cache keys
+const PATIENTS_LITE_KEY = "patientsLite";
+const LATEST_ADM_INDEX_KEY = "latestAdmissionIndex";
+
+// Read a simple object/dictionary from cache
+async function readDict(key) {
+  const { items } = await loadCache(key);
+  return items || {}; // treat as {} if not present
+}
+
+// Write a simple object/dictionary to cache
+async function writeDict(key, obj) {
+  // saveCache accepts any JSON-serializable structure
+  await saveCache(key, obj);
+}
+
+// Update index: patientId -> latestAdmissionId
+async function updateLatestAdmissionIndex(pid, admissionDetails = []) {
+  const latest = resolveLatestAdmissionId(admissionDetails);
+  const dict = await readDict(LATEST_ADM_INDEX_KEY);
+  dict[pid] = latest || "";
+  await writeDict(LATEST_ADM_INDEX_KEY, dict);
+  return latest || "";
+}
+
+
 function resolveLatestAdmissionId(admissionDetails = []) {
   if (!Array.isArray(admissionDetails) || admissionDetails.length === 0) return "";
   const active = admissionDetails.find(
@@ -108,29 +134,63 @@ const AssignBed = ({ open, onClose, selectedBed2, beds, refreshBeds }) => {
   }, [open, VITE_APP_SERVER]);
 
   // When a patient is chosen (by label), resolve patientId and fetch their latest admission
-  const handlePatientChange = async (label) => {
-    const pid = patientL2I[label] || "";
-    if (!pid) {
-      setForm((f) => ({ ...f, patientId: "", admissionId: "" }));
-      return;
-    }
+ const handlePatientChange = async (label) => {
+  const pid = patientL2I[label] || "";
+  if (!pid) {
+    setForm((f) => ({ ...f, patientId: "", admissionId: "" }));
+    return;
+  }
 
+  // ONLINE ⇒ fetch, compute, cache; OFFLINE ⇒ use cache/index
+  if (isOnline()) {
     try {
-      // Get full patient doc to determine latest admissionId robustly
       const { data } = await axios.get(`${VITE_APP_SERVER}/api/v1/patient/${pid}`);
       const patient = data?.data || {};
       const admissionId = resolveLatestAdmissionId(patient.admissionDetails || []);
 
-      setForm((f) => ({
-        ...f,
-        patientId: pid,
-        admissionId,
-      }));
+      // 1) Set UI
+      setForm((f) => ({ ...f, patientId: pid, admissionId }));
+
+      // 2) Cache the full patient for offline reuse
+      await saveCache(`patient:${pid}`, patient);
+
+      // 3) Cache the computed latest admission id in a small index
+      await updateLatestAdmissionIndex(pid, patient.admissionDetails || []);
     } catch (err) {
-      console.error("Failed to fetch patient details:", err);
-      setForm((f) => ({ ...f, patientId: pid, admissionId: "" }));
+      console.error("Failed to fetch patient details (online path):", err);
+      // Even though a request failed online, try offline fallbacks:
+      await fallbackLatestAdmissionOffline(pid);
     }
-  };
+  } else {
+    await fallbackLatestAdmissionOffline(pid);
+  }
+};
+
+
+async function fallbackLatestAdmissionOffline(pid) {
+  // Try the small index first: O(1)
+  const idx = await readDict(LATEST_ADM_INDEX_KEY);
+  let admissionId = idx[pid];
+
+  if (!admissionId) {
+    // Fallback to cached full patient doc if we have it
+    const { items: cachedPatient } = await loadCache(`patient:${pid}`);
+    if (cachedPatient) {
+      admissionId = resolveLatestAdmissionId(cachedPatient.admissionDetails || []);
+      // Refresh index so next time is O(1)
+      const dict = await readDict(LATEST_ADM_INDEX_KEY);
+      dict[pid] = admissionId || "";
+      await writeDict(LATEST_ADM_INDEX_KEY, dict);
+    }
+  }
+
+  setForm((f) => ({
+    ...f,
+    patientId: pid,
+    admissionId: admissionId || "",
+  }));
+}
+
 
   useEffect(() => {
     const onBackOnline = async () => {
@@ -187,28 +247,28 @@ const AssignBed = ({ open, onClose, selectedBed2, beds, refreshBeds }) => {
     });
     await refreshBeds?.();
 
-  } catch (err) {
-    // Network error without HTTP response? queue it like offline
-    if (!err?.response) {
-      await queueRequest({
-        id: uuid(),
-        collection: 'bedAssign',
-        endpoint,
-        method: 'POST',
-        dto: { data: payload },
-        meta: { sender: 'genericJSON' },
-      });
-      alert('You are offline. The request will process as soon as you connect to the internet.');
-      onClose?.();
-      await refreshBeds?.();
-    } else {
-      console.error(err);
-      alert(err?.response?.data?.message || 'Assignment failed. Please try again.');
-    }
-  } finally {
-    setSubmitting(false);
+  
+} catch (err) {
+  if (!err?.response) {
+    await queueRequest({
+      id: uuid(),
+      collection: 'bedAssign',
+      endpoint,
+      method: 'POST',
+      dto: payload, // <-- keep consistent
+      meta: { sender: 'genericJSON' },
+    });
+    alert('You are offline. The request will process as soon as you connect to the internet.');
+    onClose?.();
+    await refreshBeds?.();
+  } else {
+    console.error(err);
+    alert(err?.response?.data?.message || 'Assignment failed. Please try again.');
   }
-};
+} finally {
+  setSubmitting(false);
+}
+}
   const canSubmit =
     !submitting && form.patientId && form.admissionId && form.bedId;
 

@@ -2,15 +2,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { PDFDocument } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
-import { GlobalWorkerOptions } from 'pdfjs-dist/build/pdf';
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { ChevronLeft } from 'lucide-react';
 import { fetchWithCache } from '../../../../offline/fetchWithCache';
 import { usePatient } from '../../../../context/PatientContext';
-GlobalWorkerOptions.workerSrc = pdfjsWorker;
 import axios from "axios";
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+
+// ⬇️ put these near your other imports
+import * as pdfjsLib from 'pdfjs-dist';
+import PdfJsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker';
+
+// ⬇️ remove GlobalWorkerOptions.workerSrc ... and use workerPort instead
+pdfjsLib.GlobalWorkerOptions.workerPort = new PdfJsWorker();
 
 // ✅ NEW: offline helpers
 import { useOnline } from "../../../../offline/useOnline";
@@ -20,7 +23,7 @@ const VITE_APP_SERVER = import.meta.env.VITE_APP_SERVER;
 
 const PDFWriter = () => {
   const [searchParams] = useSearchParams();
-  const location = useLocation();          // ✅ to read Link state fallback
+  const location = useLocation();   
   const navigate = useNavigate();
 
   const [numPages, setNumPages] = useState(0);
@@ -50,8 +53,14 @@ const PDFWriter = () => {
   const originalBytesRef = useRef/** @type {Uint8Array|null} */(null);
 
   // tool: 'pen' | 'eraser'
-  const [tool, setTool] = useState('pen');
-  const [eraserSize, setEraserSize] = useState(24);
+// tool: 'pen' | 'eraser'
+const [tool, setTool] = useState('pen');
+const [eraserSize, setEraserSize] = useState(24);
+
+// NEW: pen options
+const [penColor, setPenColor] = useState('#6F3CDB'); // default matches your Save btn
+const [penSize, setPenSize] = useState(2.5);         // px; SignaturePad uses width, not radius
+
 
   // per-page erase state
   const erasingRefs   = useRef([]);   // boolean per page
@@ -384,45 +393,88 @@ const PDFWriter = () => {
           </button>
 
           <div className="flex items-center gap-3 pl-2 ml-1 border-l border-zinc-200">
-            <div className="inline-flex rounded-xl p-1 bg-zinc-100 border border-zinc-200">
-              <button
-                onClick={() => setTool('pen')}
-                className={`h-[44px] px-3 rounded-lg text-sm font-medium transition ${
-                  tool === 'pen' ? 'bg-white shadow-sm text-zinc-800' : 'text-zinc-600 hover:text-zinc-800'
-                }`}
-                title="Pen (P)"
-              >
-                ✒️ Pen
-              </button>
-              <button
-                onClick={() => setTool('eraser')}
-                className={`h-[44px] px-3 rounded-lg text-sm font-medium transition ${
-                  tool === 'eraser' ? 'bg-white shadow-sm text-zinc-800' : 'text-zinc-600 hover:text-zinc-800'
-                }`}
-                title="Eraser (E)"
-              >
-                🧽 Eraser
-              </button>
-            </div>
+  <div className="inline-flex rounded-xl p-1 bg-zinc-100 border border-zinc-200">
+    <button
+      onClick={() => setTool('pen')}
+      className={`h-[44px] px-3 rounded-lg text-sm font-medium transition ${tool === 'pen' ? 'bg-white shadow-sm text-zinc-800' : 'text-zinc-600 hover:text-zinc-800'}`}
+      title="Pen (P)"
+    >
+      ✒️ Pen
+    </button>
+    <button
+      onClick={() => setTool('eraser')}
+      className={`h-[44px] px-3 rounded-lg text-sm font-medium transition ${tool === 'eraser' ? 'bg-white shadow-sm text-zinc-800' : 'text-zinc-600 hover:text-zinc-800'}`}
+      title="Eraser (E)"
+    >
+      🧽 Eraser
+    </button>
+  </div>
 
-            {tool === 'eraser' && (
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-zinc-600">Size</label>
-                <input
-                  type="range"
-                  min={6}
-                  max={72}
-                  value={eraserSize}
-                  onChange={(e) => setEraserSize(Number(e.target.value))}
-                  className="accent-zinc-800 h-1 w-28"
-                  title={`Eraser size: ${eraserSize}px`}
-                />
-                <span className="text-xs text-zinc-700 w-5 text-right tabular-nums">
-                  {eraserSize}px
-                </span>
-              </div>
-            )}
-          </div>
+  {tool === 'pen' && (
+    <div className="flex items-center gap-4">
+      {/* Color swatches */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-zinc-600">Color</span>
+        {['#111827', '#6F3CDB', '#EF4444', '#10B981', '#2563EB', '#F59E0B'].map((c) => (
+          <button
+            key={c}
+            onClick={() => setPenColor(c)}
+            className={`h-6 w-6 rounded-full border ${penColor === c ? 'ring-2 ring-offset-2 ring-zinc-400' : 'border-zinc-300'}`}
+            style={{ background: c }}
+            title={c}
+          />
+        ))}
+        {/* Custom color picker (optional) */}
+        <label className="relative inline-flex items-center">
+          <input
+            type="color"
+            className="h-6 w-6 rounded-md border border-zinc-300 p-0 bg-transparent cursor-pointer"
+            value={penColor}
+            onChange={(e) => setPenColor(e.target.value)}
+            title="Custom color"
+          />
+        </label>
+      </div>
+
+      {/* Thickness slider */}
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-zinc-600">Thickness</label>
+        <input
+          type="range"
+          min={0.5}
+          max={8}
+          step={0.5}
+          value={penSize}
+          onChange={(e) => setPenSize(Number(e.target.value))}
+          className="accent-zinc-800 h-1 w-36"
+          title={`Pen thickness: ${penSize}px`}
+        />
+        <span className="text-xs text-zinc-700 w-8 text-right tabular-nums">
+          {penSize.toFixed(1)}px
+        </span>
+      </div>
+    </div>
+  )}
+
+  {tool === 'eraser' && (
+    <div className="flex items-center gap-2">
+      <label className="text-xs text-zinc-600">Size</label>
+      <input
+        type="range"
+        min={6}
+        max={72}
+        value={eraserSize}
+        onChange={(e) => setEraserSize(Number(e.target.value))}
+        className="accent-zinc-800 h-1 w-28"
+        title={`Eraser size: ${eraserSize}px`}
+      />
+      <span className="text-xs text-zinc-700 w-5 text-right tabular-nums">
+        {eraserSize}px
+      </span>
+    </div>
+  )}
+</div>
+
         </div>
       </div>
 
@@ -438,10 +490,13 @@ const PDFWriter = () => {
           >
             <canvas ref={(el) => (bgCanvasRefs.current[i] = el)} className="block" />
             <SignatureCanvas
-              ref={(el) => (overlayRefs.current[i] = el)}
-              penColor="purple"
-              canvasProps={{ className: 'absolute top-0 left-0' }}
-            />
+  ref={(el) => (overlayRefs.current[i] = el)}
+  penColor={penColor}
+  minWidth={penSize}
+  maxWidth={penSize}
+  canvasProps={{ className: 'absolute top-0 left-0' }}
+/>
+
             <div className="flex gap-2 mt-2">
               <button className="btn" onClick={() => clearPage(i)}>
                 Clear Page {i + 1}
